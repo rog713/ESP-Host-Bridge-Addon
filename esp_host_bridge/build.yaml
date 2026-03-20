@@ -1,0 +1,6 @@
+build_from:
+  amd64: python:3.13-alpine3.22
+  aarch64: python:3.13-alpine3.22
+  armv7: python:3.13-alpine3.22
+  armhf: python:3.13-alpine3.22
+
