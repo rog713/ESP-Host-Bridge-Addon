@@ -2084,11 +2084,16 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     frame = state.tx_frame_index % 6
     state.tx_frame_index = (state.tx_frame_index + 1) % 6
 
+    # If no hardware sensor data is available (e.g. VM), do not report the value.
+    # Orientation: Home Assistant System Monitor logic.
+    cpu_temp_val = f"TEMP={cpu_temp:.1f}," if cpu_temp_available else ""
+    disk_temp_val = f"DISK={state.disk_temp_c:.1f}," if disk_temp_available else ""
+
     # Rotate compact frames to avoid overflowing the ESP USB CDC RX buffer.
     if frame == 0:
         return (
             f"CPU={cpu_pct:.1f},"
-            f"TEMP={cpu_temp:.1f},"
+            f"{cpu_temp_val}"
             f"MEM={mem_pct:.1f},"
             f"UP={int(uptime_s)},"
             f"RX={rx_kbps:.0f},"
@@ -2108,7 +2113,7 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
         )
     if frame == 1:
         return (
-            f"DISK={state.disk_temp_c:.1f},"
+            f"{disk_temp_val}"
             f"DISKPCT={state.disk_usage_pct:.1f},"
             f"DISKR={disk_r_kbs:.0f},"
             f"DISKW={disk_w_kbs:.0f},"
