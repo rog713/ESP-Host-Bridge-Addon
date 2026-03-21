@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026.03.21.32
+- Fixed "Missing required option 'serial_port'" and restored backward compatibility for Home Assistant entity settings.
+- Restored Serial Port selector (device dropdown) and added explicit device mapping support.
+
+## 2026.03.21.28
+- Stabilized Telemetry Live status to prevent 0s/1s flickering in the Web UI.
+- Updated documentation to emphasize System Monitor requirement for HA mode.
+
 ## 2026.03.21.27
 - Improved auto-telemetry for HA Proxy mode: Uptime and Disk Usage now fallback to Supervisor API data if no specific entities are configured.
 - Added Operating System information to the Host status display.
