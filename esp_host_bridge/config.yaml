@@ -16,14 +16,14 @@ ingress_port: 8654
 panel_icon: "mdi:monitor-dashboard"
 panel_title: "ESP Host Bridge"
 # host_network: true
-host_uts: true
+# host_uts: true
 hassio_api: true
 hassio_role: manager
 homeassistant_api: true
 udev: true
 uart: true
-full_access: true
-apparmor: false
+full_access: false
+apparmor: true
 webui: "http://[HOST]:[PORT:8654]"
 watchdog: "http://[HOST]:[PORT:8654]/api/status"
 options: {}

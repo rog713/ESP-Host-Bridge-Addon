@@ -390,6 +390,20 @@ def _supervisor_request_json(path: str, timeout: float, method: str = "GET", pay
     return decoded
 
 
+def get_home_assistant_state(entity_id: str, timeout: float = 2.0) -> Optional[str]:
+    """Fetch the 'state' string for a specific Home Assistant entity."""
+    if not SUPERVISOR_TOKEN or not entity_id:
+        return None
+    try:
+        # The Supervisor API provides a proxy to the HA Core API at /core/api/states/<entity_id>
+        res = _supervisor_request_json(f"/core/api/states/{entity_id}", timeout=timeout)
+        if isinstance(res, dict) and "state" in res:
+            return str(res["state"])
+    except Exception:
+        pass
+    return None
+
+
 def get_home_assistant_addons(timeout: float) -> list[dict[str, Any]]:
     payload = _supervisor_request_json("/addons", timeout=timeout)
     rows = payload.get("addons") if isinstance(payload, dict) else payload
@@ -1921,10 +1935,32 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     now = time.time()
     homeassistant_mode = is_home_assistant_app_mode()
     state.ha_token_present = bool(SUPERVISOR_TOKEN)
-    cpu_pct, state.cpu_prev_total, state.cpu_prev_idle = get_cpu_percent(state.cpu_prev_total, state.cpu_prev_idle)
-    mem_pct = get_mem_percent()
+
+    # 1. Fetch metrics (Home Assistant Proxy Mode)
+    # If HA entities are provided, we pull from them to allow "Green" security rating (no full_access needed)
+    ha_cpu = get_home_assistant_state(getattr(args, 'ha_entity_cpu', ''), timeout=args.timeout) if homeassistant_mode else None
+    ha_mem = get_home_assistant_state(getattr(args, 'ha_entity_mem', ''), timeout=args.timeout) if homeassistant_mode else None
+    ha_temp = get_home_assistant_state(getattr(args, 'ha_entity_temp', ''), timeout=args.timeout) if homeassistant_mode else None
+
+    # CPU
+    if ha_cpu is not None:
+        cpu_pct = safe_float(ha_cpu, 0.0)
+    else:
+        cpu_pct, state.cpu_prev_total, state.cpu_prev_idle = get_cpu_percent(state.cpu_prev_total, state.cpu_prev_idle)
+
+    # MEM
+    if ha_mem is not None:
+        mem_pct = safe_float(ha_mem, 0.0)
+    else:
+        mem_pct = get_mem_percent()
+
+    # TEMP
+    if ha_temp is not None:
+        cpu_temp_sample = safe_float(ha_temp, None)
+    else:
+        cpu_temp_sample = get_cpu_temp_c(getattr(args, 'cpu_temp_sensor', None))
+
     uptime_s = get_uptime_seconds()
-    cpu_temp_sample = get_cpu_temp_c(getattr(args, 'cpu_temp_sensor', None))
     cpu_temp_available = cpu_temp_sample is not None
     cpu_temp = float(cpu_temp_sample or 0.0)
     if (now - state.last_disk_temp_ts) >= DISK_TEMP_REFRESH_SECONDS:
@@ -2294,6 +2330,9 @@ def webui_default_cfg() -> Dict[str, Any]:
         "cpu_temp_sensor": "",
         "fan_sensor": "",
         "power_control_enabled": False,
+        "ha_entity_cpu": "sensor.processor_use",
+        "ha_entity_mem": "sensor.memory_use_percent",
+        "ha_entity_temp": "sensor.processor_temperature",
     }
 
 
@@ -2954,6 +2993,9 @@ def cfg_from_form(form: Any) -> Dict[str, Any]:
             "cpu_temp_sensor": form.get("cpu_temp_sensor"),
             "fan_sensor": form.get("fan_sensor"),
             "power_control_enabled": _has_checkbox("power_control_enabled"),
+            "ha_entity_cpu": form.get("ha_entity_cpu"),
+            "ha_entity_mem": form.get("ha_entity_mem"),
+            "ha_entity_temp": form.get("ha_entity_temp"),
         }
     )
 
@@ -3124,6 +3166,29 @@ def create_app(
         msg_html = f'<div class="ok">{html.escape(msg)}</div>' if msg else ""
         err_html = f'<div class="err">{html.escape(err)}</div>' if err else ""
         homeassistant_mode = is_home_assistant_app_mode()
+        ha_proxy_section = ""
+        if homeassistant_mode:
+            ha_proxy_section = f"""
+      <details class=\"section\" data-section-key=\"ha_proxy\"><summary><span class=\"section-icon\" aria-hidden=\"true\"><span class=\"mdi mdi-shield-check-outline\"></span></span>Home Assistant Proxy (Green Mode)</summary><div class=\"section-body\">
+      <div class=\"hint\">Use these to pull metrics from Home Assistant's <b>System Monitor</b> integration instead of direct host access. This is required for VMs and high security ratings.</div>
+      <div class=\"field\">
+        <label for=\"ha_entity_cpu\">CPU Usage Entity</label>
+        <input type=\"text\" name=\"ha_entity_cpu\" id=\"ha_entity_cpu\" value=\"{html.escape(str(cfg.get('ha_entity_cpu', '')))}\" placeholder=\"sensor.processor_use\">
+        <div class=\"hint\">Entity ID for CPU percentage (e.g. <code>sensor.processor_use</code>)</div>
+      </div>
+      <div class=\"field\">
+        <label for=\"ha_entity_mem\">Memory Usage Entity</label>
+        <input type=\"text\" name=\"ha_entity_mem\" id=\"ha_entity_mem\" value=\"{html.escape(str(cfg.get('ha_entity_mem', '')))}\" placeholder=\"sensor.memory_use_percent\">
+        <div class=\"hint\">Entity ID for Memory percentage (e.g. <code>sensor.memory_use_percent</code>)</div>
+      </div>
+      <div class=\"field\">
+        <label for=\"ha_entity_temp\">CPU Temperature Entity</label>
+        <input type=\"text\" name=\"ha_entity_temp\" id=\"ha_entity_temp\" value=\"{html.escape(str(cfg.get('ha_entity_temp', '')))}\" placeholder=\"sensor.processor_temperature\">
+        <div class=\"hint\">Entity ID for CPU Temperature (e.g. <code>sensor.processor_temperature</code>)</div>
+      </div>
+      </div></details>
+      """
+
         workload_section_title = "Add-ons" if homeassistant_mode else "Docker"
         workload_enable_label = "Enable Add-on Polling" if homeassistant_mode else "Enable Docker Polling"
         workload_enable_name = "addons_polling_enabled" if homeassistant_mode else "docker_polling_enabled"
@@ -3269,7 +3334,9 @@ def create_app(
       <div class=\"row\"><label>Baud Rate</label><div><input id=\"baudInput\" name=\"baud\" type=\"number\" value=\"{html.escape(str(cfg.get('baud', 115200)))}\"><div class=\"hint\">Most setups use <code>115200</code>.</div></div></div>
       <div class=\"row\"><label>Port Test</label><div><button id=\"testSerialBtn\" class=\"secondary\" type=\"button\">Test Port</button><div class=\"hint\">Checks whether the selected Serial Port can be opened right now.</div><div id=\"testSerialResult\" class=\"hint\" style=\"margin-top:6px;\"></div></div></div>
       </div></details>
+      {ha_proxy_section}
       <details class=\"section\" data-section-key=\"host_metrics\" open><summary><span class=\"section-icon\" aria-hidden=\"true\"><span class=\"mdi mdi-chart-line\"></span></span>Telemetry</summary><div class=\"section-body\">
+
       <div class=\"row\"><label>Network Interface</label><div><input id=\"ifaceInput\" name=\"iface\" type=\"text\" value=\"{html.escape(str(cfg.get('iface', '')))}\"><div class=\"hint\">Optional. Leave blank to auto-detect, or set a name like <code>eth0</code>/<code>br0</code>.</div></div></div>
       <div class=\"row\"><label>Detected Interfaces</label><div><div class=\"actions\" style=\"margin-top:0;\"><select id=\"ifaceSelect\" style=\"min-width:280px; flex:1;\"><option value=\"\">(click Refresh Interfaces)</option></select><button id=\"refreshIfaceBtn\" class=\"secondary\" type=\"button\">Refresh Interfaces</button><button id=\"useIfaceBtn\" class=\"secondary\" type=\"button\">Use Interface</button></div><div id=\"ifaceResult\" class=\"hint\" style=\"margin-top:6px;\"></div></div></div>
       <div class=\"row\"><label>Update Interval (s)</label><div><input name=\"interval\" type=\"number\" step=\"0.1\" value=\"{html.escape(str(cfg.get('interval', 1.0)))}\"><div class=\"hint\">How often metrics are sent to the ESP device.</div></div></div>
