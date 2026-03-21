@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026.03.21.03
+- Fixed `NameError: name 'st' is not defined` that caused the Web UI to crash.
+
 ## 2026.03.21.02
 - Fixed redundant Telemetry UI showing failed local sensors when in Home Assistant Proxy (Green Mode).
 - Added missing Fan Speed Entity field to the Home Assistant Proxy configuration.

@@ -3412,6 +3412,7 @@ def create_app(
         vm_list_label = "Integrations" if homeassistant_mode else "Virtual Machines"
         vm_waiting_text = "Waiting for integration data..." if homeassistant_mode else "Waiting for VM data..."
         vm_show_all = "Show all integrations" if homeassistant_mode else "Show all virtual machines"
+        st = pub.status(cfg)
         # When in HA mode, many local telemetry settings are redundant because of the proxy entities.
         if homeassistant_mode:
             telemetry_body = f"""
