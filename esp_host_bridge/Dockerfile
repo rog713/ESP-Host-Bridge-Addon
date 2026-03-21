@@ -10,7 +10,6 @@ RUN apk add --no-cache \
         nvme-cli \
         pciutils \
         py3-flask \
-        py3-psutil \
         py3-pyserial \
         py3-websockets \
         py3-yaml \

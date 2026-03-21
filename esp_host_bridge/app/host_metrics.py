@@ -30,10 +30,7 @@ from pathlib import Path
 from typing import Any, Deque, Dict, Optional, Tuple
 from urllib.parse import quote_plus
 
-try:
-    import psutil  # type: ignore
-except Exception:
-    psutil = None
+# removed psutil
 
 try:
     import serial  # type: ignore
@@ -778,12 +775,6 @@ def get_cpu_percent(prev_total: Optional[int], prev_idle: Optional[int]) -> Tupl
             return max(0.0, min(100.0, pct)), total, idle
     except Exception:
         pass
-
-    if psutil:
-        try:
-            return float(psutil.cpu_percent(interval=None)), prev_total, prev_idle
-        except Exception:
-            pass
     return 0.0, prev_total, prev_idle
 
 
@@ -822,12 +813,6 @@ def get_mem_percent() -> float:
             return max(0.0, min(100.0, pct))
     except Exception:
         pass
-
-    if psutil:
-        try:
-            return float(psutil.virtual_memory().percent)
-        except Exception:
-            pass
     return 0.0
 
 
@@ -838,11 +823,6 @@ def get_uptime_seconds() -> float:
         return safe_float(first, 0.0) or 0.0
     except Exception:
         pass
-    if psutil:
-        try:
-            return max(0.0, time.time() - float(psutil.boot_time()))
-        except Exception:
-            pass
     return 0.0
 
 
@@ -867,21 +847,8 @@ def _parse_proc_net_dev() -> dict[str, Tuple[float, float]]:
     return out
 
 
-def _psutil_net_dev() -> dict[str, Tuple[float, float]]:
-    out: dict[str, Tuple[float, float]] = {}
-    if not psutil:
-        return out
-    try:
-        stats = psutil.net_io_counters(pernic=True)
-        for iface, row in stats.items():
-            out[iface] = (float(getattr(row, "bytes_recv", 0.0)), float(getattr(row, "bytes_sent", 0.0)))
-    except Exception:
-        return {}
-    return out
-
-
 def get_net_bytes_local(iface_hint: Optional[str] = None, last_iface: Optional[str] = None) -> Tuple[float, float, Optional[str]]:
-    stats = _parse_proc_net_dev() or _psutil_net_dev()
+    stats = _parse_proc_net_dev()
     if not stats:
         return 0.0, 0.0, None
     if iface_hint and iface_hint in stats:
@@ -913,46 +880,7 @@ def _read_temp_millic(path: str) -> Optional[float]:
 def get_cpu_temp_c(sensor_hint: Optional[str] = None) -> Optional[float]:
     hint = (sensor_hint or "").strip().lower()
 
-    # 1. Try psutil sensors
-    if psutil:
-        try:
-            temps = psutil.sensors_temperatures(fahrenheit=False)
-            # If hint is provided, try exact match first
-            if hint:
-                for key, entries in temps.items():
-                    lk = key.lower()
-                    for e in entries:
-                        label = (getattr(e, "label", "") or "").lower()
-                        current = safe_float(getattr(e, "current", None), None)
-                        if current is None or not (-40.0 <= current <= 160.0):
-                            continue
-                        if hint in {f"psutil:{lk}:{label}", f"{lk}:{label}", label}:
-                            return float(current)
-
-            # Look for processor related sensors (similar to System Monitor logic)
-            # Prioritize common CPU/Package labels
-            for key, entries in temps.items():
-                lk = key.lower()
-                for e in entries:
-                    label = (getattr(e, "label", "") or "").lower()
-                    current = safe_float(getattr(e, "current", None), None)
-                    if current is None or not (-40.0 <= current <= 160.0):
-                        continue
-                    if any(x in lk for x in ("cpu", "core", "k10", "pkg", "soc", "composite")) or any(
-                        x in label for x in ("cpu", "package", "tdie", "core")
-                    ):
-                        return float(current)
-
-            # Fallback to the very first available sensor if nothing matched
-            for entries in temps.values():
-                for e in entries:
-                    current = safe_float(getattr(e, "current", None), None)
-                    if current is not None and (-40.0 <= current <= 160.0):
-                        return float(current)
-        except Exception:
-            pass
-
-    # 2. Try /sys/class/thermal (Linux fallback)
+    # 1. Try /sys/class/thermal (Linux fallback)
     try:
         thermal_dir = "/sys/class/thermal"
         if os.path.isdir(thermal_dir):
@@ -993,29 +921,6 @@ def get_cpu_temp_c(sensor_hint: Optional[str] = None) -> Optional[float]:
 
 def get_fan_rpm(sensor_hint: Optional[str] = None) -> Optional[float]:
     hint = (sensor_hint or "").strip().lower()
-    if psutil and hasattr(psutil, "sensors_fans"):
-        try:
-            fans = psutil.sensors_fans()  # type: ignore[attr-defined]
-            if hint:
-                for group, entries in (fans or {}).items():
-                    gl = str(group).lower()
-                    for idx, e in enumerate(entries):
-                        label = (getattr(e, "label", "") or "").lower()
-                        cur = safe_float(getattr(e, "current", None), None)
-                        if cur is None or cur < 0:
-                            continue
-                        if hint in {f"psutil:{gl}:{label}", f"psutil:{gl}:fan{idx+1}", f"{gl}:{label}", label}:
-                            return float(cur)
-            vals: list[float] = []
-            for entries in (fans or {}).values():
-                for e in entries:
-                    cur = safe_float(getattr(e, "current", None), None)
-                    if cur is not None and cur >= 0:
-                        vals.append(float(cur))
-            if vals:
-                return max(vals)
-        except Exception:
-            pass
     try:
         for hw in sorted(os.listdir('/sys/class/hwmon')):
             base = f'/sys/class/hwmon/{hw}'
@@ -1035,43 +940,10 @@ def get_fan_rpm(sensor_hint: Optional[str] = None) -> Optional[float]:
 
 
 def get_disk_usage_pct(disk_hint: Optional[str] = None, active_disk: Optional[str] = None) -> float:
-    if psutil:
-        try:
-            parts = psutil.disk_partitions(all=False)
-            hint_name = _normalize_disk_name(disk_hint or active_disk)
-            selected_mount = None
-            if hint_name:
-                for part in parts:
-                    dev = str(getattr(part, 'device', '') or '')
-                    if dev.startswith('/dev/') and _normalize_disk_name(dev) == hint_name:
-                        selected_mount = str(getattr(part, 'mountpoint', '') or '')
-                        break
-                if selected_mount is None:
-                    for part in parts:
-                        dev = str(getattr(part, 'device', '') or '')
-                        if dev.startswith('/dev/') and dev.startswith(f'/dev/{hint_name}'):
-                            selected_mount = str(getattr(part, 'mountpoint', '') or '')
-                            break
-            if not selected_mount:
-                for preferred in ('/mnt/user', '/mnt/cache', '/'):
-                    for part in parts:
-                        if str(getattr(part, 'mountpoint', '') or '') == preferred:
-                            selected_mount = preferred
-                            break
-                    if selected_mount:
-                        break
-            if not selected_mount and parts:
-                selected_mount = str(getattr(parts[0], 'mountpoint', '') or '')
-            if selected_mount:
-                try:
-                    return float(psutil.disk_usage(selected_mount).percent)
-                except Exception:
-                    pass
-        except Exception:
-            pass
     try:
         st = os.statvfs('/')
         total = float(st.f_blocks) * float(st.f_frsize)
+
         avail = float(st.f_bavail) * float(st.f_frsize)
         used = max(0.0, total - avail)
         if total > 0:
@@ -1192,23 +1064,6 @@ def _disk_candidates(device_hint: Optional[str]) -> list[str]:
 
 def get_disk_temp_c(timeout: float, disk_device: Optional[str] = None) -> Optional[float]:
     hint_name = _normalize_disk_name(disk_device)
-    if psutil:
-        try:
-            temps = psutil.sensors_temperatures(fahrenheit=False)
-            for key, entries in temps.items():
-                lk = key.lower()
-                if not any(x in lk for x in ("nvme", "ssd", "smart", "drivetemp")):
-                    continue
-                for e in entries:
-                    label = (getattr(e, "label", "") or "").lower()
-                    if hint_name and hint_name not in label and hint_name not in lk:
-                        continue
-                    current = safe_float(getattr(e, "current", None), None)
-                    if current is not None and -20.0 <= current <= 150.0:
-                        return float(current)
-        except Exception:
-            pass
-
     for dev in _disk_candidates(disk_device):
         for cmd in (["nvme", "smart-log", dev], ["smartctl", "-A", dev]):
             try:
@@ -1250,23 +1105,8 @@ def _read_diskstats() -> dict[str, tuple[float, float]]:
     return out
 
 
-def _psutil_diskstats() -> dict[str, tuple[float, float]]:
-    out: dict[str, tuple[float, float]] = {}
-    if not psutil:
-        return out
-    try:
-        rows = psutil.disk_io_counters(perdisk=True)
-    except Exception:
-        return out
-    for name, row in rows.items():
-        if name.startswith(("loop", "ram", "dm-", "sr", "zram", "md")):
-            continue
-        out[name] = (float(getattr(row, "read_bytes", 0.0)), float(getattr(row, "write_bytes", 0.0)))
-    return out
-
-
 def get_disk_bytes_local(disk_hint: Optional[str] = None, last_disk: Optional[str] = None) -> tuple[float, float, Optional[str]]:
-    stats = _read_diskstats() or _psutil_diskstats()
+    stats = _read_diskstats()
     if not stats:
         return 0.0, 0.0, None
 
@@ -1518,15 +1358,9 @@ def test_serial_open(port: Optional[str], baud: int) -> tuple[bool, str]:
 
 def list_network_interface_choices() -> list[str]:
     try:
-        stats = _read_net_stats_proc()
+        stats = _parse_proc_net_dev()
     except Exception:
         stats = {}
-    if not stats and psutil:
-        try:
-            io = psutil.net_io_counters(pernic=True)
-            stats = {str(k): (0.0, 0.0) for k in io.keys()}
-        except Exception:
-            stats = {}
     names = [str(k) for k in stats.keys()]
     names = sorted(set(names), key=lambda x: (x.lower() in {"lo", "loopback", "lo0"}, x.lower()))
     return names
@@ -1544,15 +1378,6 @@ def list_disk_device_choices() -> list[str]:
             return
         seen.add(x)
         choices.append(x)
-
-    if psutil:
-        try:
-            for part in psutil.disk_partitions(all=False):
-                dev = str(getattr(part, 'device', '') or '')
-                if dev.startswith('/dev/'):
-                    _add(dev)
-        except Exception:
-            pass
 
     try:
         for name in sorted(os.listdir('/sys/block')):
@@ -1577,21 +1402,6 @@ def list_cpu_temp_sensor_choices() -> list[str]:
             return
         seen.add(x)
         choices.append(x)
-
-    if psutil:
-        try:
-            temps = psutil.sensors_temperatures(fahrenheit=False)
-            for group, entries in (temps or {}).items():
-                gl = str(group).lower()
-                for e in entries:
-                    label = (getattr(e, 'label', '') or '').strip()
-                    if not label:
-                        continue
-                    ll = label.lower()
-                    if 'core' in ll or 'cpu' in ll or 'package' in ll or 'tdie' in ll:
-                        _add(f'psutil:{gl}:{ll}')
-        except Exception:
-            pass
 
     try:
         for tz in sorted([p for p in os.listdir('/sys/class/thermal') if p.startswith('thermal_zone')]):
@@ -1620,19 +1430,6 @@ def list_fan_sensor_choices() -> list[str]:
             return
         seen.add(x)
         choices.append(x)
-
-    if psutil and hasattr(psutil, 'sensors_fans'):
-        try:
-            fans = psutil.sensors_fans()  # type: ignore[attr-defined]
-            for group, entries in (fans or {}).items():
-                gl = str(group).lower()
-                for idx, e in enumerate(entries):
-                    label = (getattr(e, 'label', '') or '').strip().lower()
-                    if label:
-                        _add(f'psutil:{gl}:{label}')
-                    _add(f'psutil:{gl}:fan{idx+1}')
-        except Exception:
-            pass
 
     try:
         for hw in sorted(os.listdir('/sys/class/hwmon')):

@@ -60,7 +60,7 @@ When the add-on detects it is running inside Home Assistant, it uses **HA Proxy 
 
 ### Host Mode (Standalone)
 
-When running outside of Home Assistant (standalone Docker or script), the agent pulls metrics directly from the host operating system using `psutil`, `/proc`, and other local hardware sensors.
+When running outside of Home Assistant (standalone Docker or script), the agent pulls metrics directly from the host operating system using `/proc` and other local hardware sensors.
 
 ### Configuration
 

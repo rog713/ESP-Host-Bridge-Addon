@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026.03.21.42
+- Step 1 of removing local data fetching: Removed `psutil` dependency and its related logic.
+
 ## 2026.03.21.41
 - Rollback to last stable state (v2026.03.21.33) to restore full Web UI functionality.
 - Maintained support for Home Assistant GPU and Fan sensors.
