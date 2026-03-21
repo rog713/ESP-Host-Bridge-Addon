@@ -4021,9 +4021,14 @@ window.__HOST_METRICS_BOOT__ = {{
 
     @app.get("/api/discover-ha-proxy")
     def api_discover_ha_proxy() -> Any:
-        cfg = load_cfg(cfg_path)
-        timeout = _clean_float(cfg.get("timeout"), 2.0)
-        return jsonify(discover_ha_proxy_entities(timeout=timeout))
+        try:
+            cfg = load_cfg(cfg_path)
+            timeout = _clean_float(cfg.get("timeout"), 5.0)
+            data = discover_ha_proxy_entities(timeout=timeout)
+            return jsonify(data)
+        except Exception as e:
+            logging.error("HA discovery failed: %s", e)
+            return jsonify({"error": str(e)}), 500
 
     @app.get("/api/config")
     def api_config() -> Any:

@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026.03.21.06
+- Improved Home Assistant entity discovery with better error handling and logging.
+
 ## 2026.03.21.05
 - Fixed Home Assistant Proxy entities not persisting after Save + Restart.
 - Added "Discover Entities" button to auto-detect System Monitor sensors (including German localized names).

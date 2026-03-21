@@ -2051,12 +2051,20 @@ async function discoverHaProxyEntities() {
   if (!btn || !res) return;
   btn.disabled = true;
   res.textContent = 'Discovering entities...';
+  console.log('Starting HA proxy discovery...');
   try {
     const response = await fetch(getApiUrl('/api/discover-ha-proxy'));
     const data = await response.json();
+    console.log('Discovery data received:', data);
+    
+    if (data.error) {
+      res.textContent = `Discovery failed: ${data.error}`;
+      return;
+    }
+    
     const keys = Object.keys(data);
     if (keys.length === 0) {
-      res.textContent = 'No System Monitor entities found. Make sure the integration is loaded in HA.';
+      res.textContent = 'No System Monitor entities found. Make sure the System Monitor integration is loaded in HA.';
     } else {
       let count = 0;
       for (const [key, eid] of Object.entries(data)) {
@@ -2064,12 +2072,15 @@ async function discoverHaProxyEntities() {
         if (input) {
           input.value = eid;
           count++;
+        } else {
+          console.warn(`Input for key "${key}" not found in DOM`);
         }
       }
-      res.textContent = `Successfully discovered ${count} entities. Click Save + Restart to apply.`;
+      res.textContent = `Successfully discovered ${count} entities. Review the fields below, then click Save + Restart at the bottom.`;
     }
   } catch (err) {
-    res.textContent = `Error discovering entities: ${err}`;
+    console.error('Discovery fetch error:', err);
+    res.textContent = `Error connecting to discovery API: ${err}`;
   } finally {
     btn.disabled = false;
   }
