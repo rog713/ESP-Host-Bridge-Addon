@@ -1977,7 +1977,7 @@ def webui_default_cfg() -> Dict[str, Any]:
         "power_control_enabled": False,
         "ha_entity_cpu": "sensor.processor_use",
         "ha_entity_mem": "sensor.memory_use_percent",
-        "ha_entity_temp": "sensor.processor_temperature",
+        "ha_entity_temp": "",
         "ha_entity_disk_pct": "",
         "ha_entity_net_rx": "",
         "ha_entity_net_tx": "",

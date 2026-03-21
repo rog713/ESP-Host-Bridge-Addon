@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.21.46
+- Removed default pre-filled value for CPU Temperature entity, as it is optional and can cause confusion on systems without one.
+- Added link to the Home Assistant System Monitor integration in the documentation, as it is highly recommended for basic telemetry.
+
 ## 2026.03.21.45
 - Final step of removing local data fetching: Removed fallback logic and functions for GPU, Fan RPM, Disk IO, Disk Temperature, Docker (via Unix socket), and VMs (via virsh).
 - Removed `gpu_polling_enabled` and related configuration options as they are now redundant.

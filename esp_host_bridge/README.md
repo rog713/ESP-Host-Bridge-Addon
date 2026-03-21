@@ -12,7 +12,7 @@ USB CDC bridge and host telemetry Web UI for ESP display devices.
 ## Prerequisites & Sensors
 
 Because this add-on does not poll local hardware, it relies on Home Assistant to provide the data. 
-You must configure the **System Monitor** integration in Home Assistant to provide the basic host metrics (CPU, RAM, Disk, Temp, Network, Uptime).
+You must configure the **[System Monitor](https://www.home-assistant.io/integrations/systemmonitor/)** integration in Home Assistant to provide the basic host metrics (CPU, RAM, Disk, Temp, Network, Uptime). This is highly recommended for local monitoring of the HA Server.
 
 If you want to display **GPU Metrics** or **Fan RPM**, you will need to add those specific sensors to Home Assistant (e.g., via HACS integrations or command-line sensors) and then map them in the Web UI.
 
