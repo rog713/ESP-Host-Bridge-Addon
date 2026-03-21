@@ -2012,18 +2012,22 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     ha_disk_write = get_home_assistant_state(getattr(args, 'ha_entity_disk_write', ''), timeout=args.timeout) if homeassistant_mode else None
 
     # CPU
+    cpu_available = True
     if ha_cpu is not None:
         cpu_pct = safe_float(ha_cpu, 0.0)
     elif homeassistant_mode:
         cpu_pct = 0.0
+        cpu_available = False
     else:
         cpu_pct, state.cpu_prev_total, state.cpu_prev_idle = get_cpu_percent(state.cpu_prev_total, state.cpu_prev_idle)
 
     # MEM
+    mem_available = True
     if ha_mem is not None:
         mem_pct = safe_float(ha_mem, 0.0)
     elif homeassistant_mode:
         mem_pct = 0.0
+        mem_available = False
     else:
         mem_pct = get_mem_percent()
 
@@ -2035,6 +2039,7 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     else:
         cpu_temp_sample = get_cpu_temp_c(getattr(args, 'cpu_temp_sensor', None))
 
+    uptime_available = True
     uptime_s = get_uptime_seconds()
     if ha_uptime is not None:
         # Check if it's an ISO timestamp (sensor.last_boot)
@@ -2049,6 +2054,7 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
             uptime_s = safe_float(ha_uptime, uptime_s)
     elif homeassistant_mode:
         uptime_s = 0.0
+        uptime_available = False
 
     cpu_temp_available = cpu_temp_sample is not None
     cpu_temp = float(cpu_temp_sample or 0.0)
@@ -2063,14 +2069,18 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
         state.disk_temp_available = disk_temp_sample is not None
         state.last_disk_temp_ts = now
     disk_temp_available = bool(getattr(state, "disk_temp_available", False))
+    disk_usage_available = True
     if (now - state.last_disk_usage_ts) >= DISK_USAGE_REFRESH_SECONDS:
         if ha_disk_pct is not None:
             state.disk_usage_pct = safe_float(ha_disk_pct, 0.0)
         elif homeassistant_mode:
             state.disk_usage_pct = 0.0
+            disk_usage_available = False
         else:
             state.disk_usage_pct = get_disk_usage_pct(args.disk_device, state.active_disk)
         state.last_disk_usage_ts = now
+    elif homeassistant_mode and not ha_disk_pct:
+        disk_usage_available = False
     gpu_enabled = not bool(getattr(args, "disable_gpu_polling", False))
     if (now - state.last_slow_sensor_ts) >= SLOW_SENSOR_REFRESH_SECONDS:
         if ha_fan is not None:
@@ -2209,16 +2219,16 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
             if state.prev_tx is not None and tx_bytes >= state.prev_tx:
                 tx_kbps = ((tx_bytes - state.prev_tx) * 8.0) / 1000.0 / dt
 
-    # Overwrite with HA Proxy if enabled.
-    # HA System Monitor throughput is in bytes/second.
-    # Bridge expects kbps (kilobits per second).
-    # kbps = (B/s * 8) / 1000
+    net_available = True
     if ha_net_rx is not None:
         rx_kbps = (safe_float(ha_net_rx, 0.0) * 8.0) / 1000.0
         state.active_iface = "HA Proxy"
+    elif homeassistant_mode:
+        net_available = False
     if ha_net_tx is not None:
         tx_kbps = (safe_float(ha_net_tx, 0.0) * 8.0) / 1000.0
         state.active_iface = "HA Proxy"
+        net_available = True
 
     if homeassistant_mode:
         disk_read_b, disk_write_b = 0, 0
@@ -2226,6 +2236,7 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     else:
         disk_read_b, disk_write_b, state.active_disk = get_disk_bytes_local(args.disk_device, state.active_disk)
 
+    disk_io_available = True
     disk_r_kbs = 0.0
     disk_w_kbs = 0.0
     if dt > 0.0 and not homeassistant_mode:
@@ -2233,6 +2244,8 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
             disk_r_kbs = (disk_read_b - state.prev_disk_read_b) / 1024.0 / dt
         if state.prev_disk_write_b is not None and disk_write_b >= state.prev_disk_write_b:
             disk_w_kbs = (disk_write_b - state.prev_disk_write_b) / 1024.0 / dt
+    elif homeassistant_mode:
+        disk_io_available = False
 
     # Overwrite with HA Proxy if enabled.
     # HA System Monitor throughput for disks is typically B/s.
@@ -2240,9 +2253,11 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     if ha_disk_read is not None:
         disk_r_kbs = safe_float(ha_disk_read, 0.0) / 1024.0
         state.active_disk = "HA Proxy"
+        disk_io_available = True
     if ha_disk_write is not None:
         disk_w_kbs = safe_float(ha_disk_write, 0.0) / 1024.0
         state.active_disk = "HA Proxy"
+        disk_io_available = True
     state.prev_disk_read_b, state.prev_disk_write_b = disk_read_b, disk_write_b
     state.prev_rx, state.prev_tx, state.prev_t = rx_bytes, tx_bytes, now
 
@@ -2258,18 +2273,27 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
 
     # If no hardware sensor data is available (e.g. VM), do not report the value.
     # Orientation: Home Assistant System Monitor logic.
+    cpu_val = f"CPU={cpu_pct:.1f}," if cpu_available else ""
+    mem_val = f"MEM={mem_pct:.1f}," if mem_available else ""
+    uptime_val = f"UP={int(uptime_s)}," if uptime_available else ""
+    net_rx_val = f"RX={rx_kbps:.0f}," if net_available else ""
+    net_tx_val = f"TX={tx_kbps:.0f}," if net_available else ""
     cpu_temp_val = f"TEMP={cpu_temp:.1f}," if cpu_temp_available else ""
     disk_temp_val = f"DISK={state.disk_temp_c:.1f}," if disk_temp_available else ""
+    disk_usage_val = f"DISKPCT={state.disk_usage_pct:.1f}," if disk_usage_available else ""
+    disk_read_val = f"DISKR={disk_r_kbs:.0f}," if disk_io_available else ""
+    disk_write_val = f"DISKW={disk_w_kbs:.0f}," if disk_io_available else ""
+    fan_val = f"FAN={state.fan_rpm:.0f}," if fan_available else ""
 
     # Rotate compact frames to avoid overflowing the ESP USB CDC RX buffer.
     if frame == 0:
         return (
-            f"CPU={cpu_pct:.1f},"
+            f"{cpu_val}"
             f"{cpu_temp_val}"
-            f"MEM={mem_pct:.1f},"
-            f"UP={int(uptime_s)},"
-            f"RX={rx_kbps:.0f},"
-            f"TX={tx_kbps:.0f},"
+            f"{mem_val}"
+            f"{uptime_val}"
+            f"{net_rx_val}"
+            f"{net_tx_val}"
             f"IFACE={state.active_iface or ''},"
             f"TEMPAV={1 if cpu_temp_available else 0},"
             f"HAMODE={1 if homeassistant_mode else 0},"
@@ -2286,10 +2310,10 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     if frame == 1:
         return (
             f"{disk_temp_val}"
-            f"DISKPCT={state.disk_usage_pct:.1f},"
-            f"DISKR={disk_r_kbs:.0f},"
-            f"DISKW={disk_w_kbs:.0f},"
-            f"FAN={state.fan_rpm:.0f},"
+            f"{disk_usage_val}"
+            f"{disk_read_val}"
+            f"{disk_write_val}"
+            f"{fan_val}"
             f"DISKTAV={1 if disk_temp_available else 0},"
             f"FANAV={1 if fan_available else 0},"
             f"POWER=RUNNING\n"

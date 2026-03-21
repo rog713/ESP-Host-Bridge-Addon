@@ -421,12 +421,38 @@ function metricText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
 }
+function toggleMetricVisibility(cardId, espPage, available) {
+  const card = document.getElementById(cardId);
+  if (card) {
+    card.style.display = available ? '' : 'none';
+  }
+  if (espPage) {
+    const tab = document.querySelector(`.esp-preview-tabs button[data-esp-page="${espPage}"]`);
+    if (tab) {
+      tab.style.display = available ? '' : 'none';
+    }
+  }
+}
+
 function updateMetricPreview(metrics) {
   const m = (metrics && typeof metrics === 'object') ? metrics : {};
-  const keys = Object.keys(m);
-  const hasAny = keys.length > 0;
   const has = (k) => Object.prototype.hasOwnProperty.call(m, k) && m[k] !== '' && m[k] !== null && m[k] !== undefined;
-  if (!hasAny) {
+  
+  // Dashboard cards and ESP tabs visibility
+  toggleMetricVisibility('mcCPU', 'info_2', has('CPU'));
+  toggleMetricVisibility('mcMEM', null, has('MEM')); // MEM shares info_2 with CPU
+  toggleMetricVisibility('mcTEMP', 'info_3', has('TEMP'));
+  toggleMetricVisibility('mcUP', 'info_7', has('UP'));
+  toggleMetricVisibility('mcNET', 'info_1', has('RX') || has('TX'));
+  toggleMetricVisibility('mcDISKIO', null, has('DISKR') || has('DISKW'));
+  toggleMetricVisibility('mcDISKTEMP', 'info_4', has('DISK'));
+  toggleMetricVisibility('mcDISKPCT', 'info_5', has('DISKPCT'));
+  toggleMetricVisibility('mcFAN', null, has('FAN')); // FAN might not have its own tab yet or shares one
+  toggleMetricVisibility('mcGPUU', 'info_6', has('GPUU'));
+  toggleMetricVisibility('mcGPUT', null, has('GPUT'));
+  toggleMetricVisibility('mcGPUVM', null, has('GPUVM'));
+
+  if (Object.keys(m).length === 0) {
     metricText('mCPU', 'Waiting...');
     metricText('mMEM', 'Waiting...');
     metricText('mTEMP', 'Waiting...');
@@ -436,14 +462,14 @@ function updateMetricPreview(metrics) {
     metricText('mVMS', 'Waiting...');
     return;
   }
-  metricText('mCPU', has('CPU') ? `${m.CPU}%` : 'Waiting...');
-  metricText('mMEM', has('MEM') ? `${m.MEM}%` : 'Waiting...');
-  metricText('mTEMP', has('TEMP') ? `${m.TEMP}°C` : 'Waiting...');
-  const rx = has('RX') ? `${m.RX}` : '...';
-  const tx = has('TX') ? `${m.TX}` : '...';
+  metricText('mCPU', has('CPU') ? `${m.CPU}%` : '--');
+  metricText('mMEM', has('MEM') ? `${m.MEM}%` : '--');
+  metricText('mTEMP', has('TEMP') ? `${m.TEMP}°C` : '--');
+  const rx = has('RX') ? `${m.RX}` : '--';
+  const tx = has('TX') ? `${m.TX}` : '--';
   metricText('mNET', `${rx} / ${tx}`);
-  const dtemp = has('DISK') ? `${m.DISK}°C` : '...';
-  const dpct = has('DISKPCT') ? `${m.DISKPCT}%` : '...';
+  const dtemp = has('DISK') ? `${m.DISK}°C` : '--';
+  const dpct = has('DISKPCT') ? `${m.DISKPCT}%` : '--';
   metricText('mDISK', `${dtemp} / ${dpct}`);
   const workloadMode = getWorkloadMode(lastStatusPayload);
   const wk = workloadMetricKeys(workloadMode);

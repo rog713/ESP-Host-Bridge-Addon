@@ -1,8 +1,11 @@
 # Changelog
 
+## 2026.03.21.08
+- Unconfigured Home Assistant sensors are now hidden from the dashboard and ESP preview tabs.
+
 ## 2026.03.21.07
 - Removed local hardware sensor fallbacks when in Home Assistant mode. All metrics now rely exclusively on the System Monitor integration (Green Mode).
-
+...
 ## 2026.03.21.06
 - Improved Home Assistant entity discovery with better error handling and logging.
 
