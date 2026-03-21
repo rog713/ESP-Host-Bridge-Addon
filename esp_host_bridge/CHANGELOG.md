@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.21.18
+- Added support for "NONE" or "DEBUG" as the Serial Port to allow testing telemetry without a physical ESP device.
+- Corrected `baud` default type in `config.yaml`.
+
 ## 2026.03.21.17
 - Added auto-completion for Home Assistant sensors inside the Web UI (Setup tab).
 - Re-enabled native Home Assistant sensor pickers in the Add-on Configuration tab with improved strictness.

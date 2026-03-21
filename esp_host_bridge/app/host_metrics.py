@@ -2411,10 +2411,14 @@ def run_agent(args: argparse.Namespace) -> int:
     state = RuntimeState()
     ser = None
     next_serial_retry_at = 0.0
+    debug_mode = str(args.serial_port or "").upper() in ("NONE", "DEBUG")
+    if debug_mode:
+        logging.info("DEBUG MODE: Serial communication is disabled (NONE/DEBUG selected)")
+
     try:
         while True:
             now = time.time()
-            if ser is None and now >= next_serial_retry_at:
+            if ser is None and now >= next_serial_retry_at and not debug_mode:
                 ser, last_port = try_open_serial_once(args.serial_port, args.baud, last_port=last_port)
                 if ser is None:
                     next_serial_retry_at = now + SERIAL_RETRY_SECONDS
@@ -2422,7 +2426,11 @@ def run_agent(args: argparse.Namespace) -> int:
                     state.host_name_sent = False
             try:
                 line = build_status_line(args, state)
-                logging.info("%s", line.strip())
+                if debug_mode:
+                    logging.info("[DEBUG] %s", line.strip())
+                else:
+                    logging.info("%s", line.strip())
+
                 if ser is not None:
                     state.rx_buf = process_usb_commands(
                         ser,
