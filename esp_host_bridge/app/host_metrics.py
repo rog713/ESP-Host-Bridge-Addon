@@ -2277,10 +2277,15 @@ def webui_default_cfg() -> Dict[str, Any]:
     }
 
 
+def _get_root_path() -> str:
+    from flask import request
+    return request.headers.get("X-Ingress-Path", "").rstrip("/")
+
+
 def _redir(value: str, key: str = "msg"):
     from flask import redirect
-
-    return redirect(f"/?{key}={quote_plus(value)}")
+    root = _get_root_path()
+    return redirect(f"{root}/?{key}={quote_plus(value)}")
 
 
 def _clean_str(v: Any, default: str = "") -> str:
@@ -2859,6 +2864,7 @@ def _render_topbar_subtitle() -> str:
 
 
 def page_html(title: str, body: str) -> str:
+    root = _get_root_path()
     mode_toggle_html = _render_mode_toggle_html()
     topbar_subtitle = _render_topbar_subtitle()
     return f"""<!doctype html>
@@ -2872,7 +2878,7 @@ def page_html(title: str, body: str) -> str:
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,0&display=swap">
   <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-  <link rel="stylesheet" href="/static/host/host_ui.css">
+  <link rel="stylesheet" href="{root}/static/host/host_ui.css">
 </head>
 <body>
   <div class="shell">
@@ -2892,6 +2898,9 @@ def page_html(title: str, body: str) -> str:
     </div>
     <div class="wrap">{body}</div>
   </div>
+  <script>
+    window.__HOST_METRICS_INGRESS_PATH__ = {json.dumps(root)};
+  </script>
 </body>
 </html>
 """
@@ -3218,12 +3227,13 @@ def create_app(
         vm_waiting_text = "Waiting for integration data..." if homeassistant_mode else "Waiting for VM data..."
         vm_show_all = "Show all integrations" if homeassistant_mode else "Show all virtual machines"
         st = pub.status(cfg)
+        root = _get_root_path()
         body = f"""
 <div id=\"setupView\" class=\"grid\">
   <div class=\"card\">
     {msg_html}
     {err_html}
-    <form method=\"post\" action=\"/save\">
+    <form method=\"post\" action=\"{root}/save\">
       <div class=\"quick-setup\">
         <h3><span class="quick-setup-icon" aria-hidden="true"><span class="mdi mdi-auto-fix"></span></span>Quick Setup</h3>
         <p>For most users: pick a serial port, test it, then save and restart the agent.</p>
@@ -3276,7 +3286,7 @@ def create_app(
       </div></details>
       <div class=\"actions form-actions-sticky\">
         <button type=\"submit\">Save + Restart</button>
-        <button class=\"secondary\" type=\"submit\" formaction=\"/save?restart=0\">Save Only</button>
+        <button class=\"secondary\" type=\"submit\" formaction=\"{root}/save?restart=0\">Save Only</button>
       </div>
       <details class=\"section\" data-section-key=\"advanced_ui\"><summary><span class=\"section-icon\" aria-hidden=\"true\"><span class=\"mdi mdi-cog-outline\"></span></span>Advanced</summary><div class=\"section-body\">
       <div class=\"hint\">Config file: <code>{html.escape(str(cfg_path))}</code></div>
@@ -3305,10 +3315,10 @@ def create_app(
             <div class="status-pill" id="espBootReason">Last ESP Reset: --</div>
           </div>
           <div class="actions" style="margin: 0;">
-            <form method="post" action="/start" style="display:inline;"><button class="secondary" type="submit">Start</button></form>
-            <form method="post" action="/restart" style="display:inline;"><button type="submit">Restart</button></form>
-            <form method="post" action="/stop" style="display:inline;"><button class="danger" type="submit">Stop</button></form>
-            <form method="get" action="/" style="display:inline;"><button class="secondary" type="submit">Refresh</button></form>
+            <form method="post" action="{root}/start" style="display:inline;"><button class="secondary" type="submit">Start</button></form>
+            <form method="post" action="{root}/restart" style="display:inline;"><button type="submit">Restart</button></form>
+            <form method="post" action="{root}/stop" style="display:inline;"><button class="danger" type="submit">Stop</button></form>
+            <form method="get" action="{root}/" style="display:inline;"><button class="secondary" type="submit">Refresh</button></form>
           </div>
         </div>
         <div class="hero-art" aria-hidden="true"><span class="mdi mdi-chart-timeline-variant"></span></div>
@@ -3690,7 +3700,7 @@ window.__HOST_METRICS_BOOT__ = {{
   nextCommLogId: {st.get('next_comm_log_id', 1)},
 }};
 </script>
-<script src="/static/host/host_ui.js"></script>
+<script src="{root}/static/host/host_ui.js"></script>
 """
         return page_html("ESP Host Bridge", body)
 
@@ -3706,8 +3716,8 @@ window.__HOST_METRICS_BOOT__ = {{
             ok_run, message_run = pub.restart(cfg)
             if not ok_run:
                 return _redir(message_run, key="err")
-            return redirect("/?msg=Saved+and+restarted")
-        return redirect("/?msg=Saved")
+            return _redir("Saved and restarted")
+        return _redir("Saved")
 
     @app.post("/start")
     def start_proc() -> Any:
