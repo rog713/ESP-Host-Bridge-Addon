@@ -380,8 +380,15 @@ def _supervisor_request_json(path: str, timeout: float, method: str = "GET", pay
     req = urllib.request.Request(url, data=body, method=method.upper())
     req.add_header("Authorization", f"Bearer {SUPERVISOR_TOKEN}")
     req.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        raw = resp.read()
+    logging.info("HA Proxy Request: %s %s", method.upper(), url)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            status = resp.getcode()
+            raw = resp.read()
+            logging.info("HA Proxy Response: %s (bytes=%d)", status, len(raw))
+    except Exception as e:
+        logging.error("HA Proxy Error: %s", e)
+        raise
     if not raw:
         return {}
     decoded = json.loads(raw.decode("utf-8", errors="ignore"))
@@ -3387,57 +3394,57 @@ def create_app(
       <div class=\"row\"><label>Auto-Discovery</label><div><button id=\"discoverHaProxyBtn\" class=\"secondary\" type=\"button\">Discover Entities</button><div id=\"discoverHaProxyResult\" class=\"hint\" style=\"margin-top:6px;\">Scans your Home Assistant instance for System Monitor sensors.</div></div></div>
       <div class=\"field\">
         <label for=\"ha_entity_cpu\">CPU Usage Entity</label>
-        <input type=\"text\" name=\"ha_entity_cpu\" id=\"ha_entity_cpu\" value=\"{html.escape(str(cfg.get('ha_entity_cpu', '')))}\" placeholder=\"sensor.processor_use\">
+        <input type=\"text\" name=\"ha_entity_cpu\" id=\"ha_entity_cpu\" value=\"{html.escape(str(cfg.get('ha_entity_cpu', '')))}\" placeholder=\"sensor.processor_use\" list=\"haSensorsList\">
         <div class=\"hint\">Entity ID for CPU percentage (e.g. <code>sensor.processor_use</code>)</div>
       </div>
       <div class=\"field\">
         <label for=\"ha_entity_mem\">Memory Usage Entity</label>
-        <input type=\"text\" name=\"ha_entity_mem\" id=\"ha_entity_mem\" value=\"{html.escape(str(cfg.get('ha_entity_mem', '')))}\" placeholder=\"sensor.memory_use_percent\">
+        <input type=\"text\" name=\"ha_entity_mem\" id=\"ha_entity_mem\" value=\"{html.escape(str(cfg.get('ha_entity_mem', '')))}\" placeholder=\"sensor.memory_use_percent\" list=\"haSensorsList\">
         <div class=\"hint\">Entity ID for Memory percentage (e.g. <code>sensor.memory_use_percent</code>)</div>
       </div>
       <div class=\"field\">
         <label for=\"ha_entity_temp\">CPU Temperature Entity</label>
-        <input type=\"text\" name=\"ha_entity_temp\" id=\"ha_entity_temp\" value=\"{html.escape(str(cfg.get('ha_entity_temp', '')))}\" placeholder=\"sensor.processor_temperature\">
+        <input type=\"text\" name=\"ha_entity_temp\" id=\"ha_entity_temp\" value=\"{html.escape(str(cfg.get('ha_entity_temp', '')))}\" placeholder=\"sensor.processor_temperature\" list=\"haSensorsList\">
         <div class=\"hint\">Entity ID for CPU Temperature (e.g. <code>sensor.processor_temperature</code>)</div>
       </div>
       <div class=\"field\">
         <label for=\"ha_entity_disk_pct\">Disk Usage (%) Entity</label>
-        <input type=\"text\" name=\"ha_entity_disk_pct\" id=\"ha_entity_disk_pct\" value=\"{html.escape(str(cfg.get('ha_entity_disk_pct', '')))}\" placeholder=\"sensor.disk_usage_percent_root\">
+        <input type=\"text\" name=\"ha_entity_disk_pct\" id=\"ha_entity_disk_pct\" value=\"{html.escape(str(cfg.get('ha_entity_disk_pct', '')))}\" placeholder=\"sensor.disk_usage_percent_root\" list=\"haSensorsList\">
         <div class=\"hint\">Entity ID for disk percentage (e.g. <code>sensor.disk_usage_percent_root</code>)</div>
       </div>
       <div class=\"field\">
         <label for=\"ha_entity_net_rx\">Network RX Entity (Throughput In)</label>
-        <input type=\"text\" name=\"ha_entity_net_rx\" id=\"ha_entity_net_rx\" value=\"{html.escape(str(cfg.get('ha_entity_net_rx', '')))}\" placeholder=\"sensor.network_throughput_in_eth0\">
+        <input type=\"text\" name=\"ha_entity_net_rx\" id=\"ha_entity_net_rx\" value=\"{html.escape(str(cfg.get('ha_entity_net_rx', '')))}\" placeholder=\"sensor.network_throughput_in_eth0\" list=\"haSensorsList\">
         <div class=\"hint\">Entity ID for network download speed (e.g. <code>sensor.network_throughput_in_eth0</code>)</div>
       </div>
       <div class=\"field\">
         <label for=\"ha_entity_net_tx\">Network TX Entity (Throughput Out)</label>
-        <input type=\"text\" name=\"ha_entity_net_tx\" id=\"ha_entity_net_tx\" value=\"{html.escape(str(cfg.get('ha_entity_net_tx', '')))}\" placeholder=\"sensor.network_throughput_out_eth0\">
+        <input type=\"text\" name=\"ha_entity_net_tx\" id=\"ha_entity_net_tx\" value=\"{html.escape(str(cfg.get('ha_entity_net_tx', '')))}\" placeholder=\"sensor.network_throughput_out_eth0\" list=\"haSensorsList\">
         <div class=\"hint\">Entity ID for network upload speed (e.g. <code>sensor.network_throughput_out_eth0</code>)</div>
       </div>
       <div class=\"field\">
         <label for=\"ha_entity_disk_temp\">Disk Temperature Entity</label>
-        <input type=\"text\" name=\"ha_entity_disk_temp\" id=\"ha_entity_disk_temp\" value=\"{html.escape(str(cfg.get('ha_entity_disk_temp', '')))}\" placeholder=\"sensor.disk_temperature_sda\">
+        <input type=\"text\" name=\"ha_entity_disk_temp\" id=\"ha_entity_disk_temp\" value=\"{html.escape(str(cfg.get('ha_entity_disk_temp', '')))}\" placeholder=\"sensor.disk_temperature_sda\" list=\"haSensorsList\">
         <div class=\"hint\">Optional. Entity ID for disk temperature (e.g. <code>sensor.disk_temperature_sda</code>)</div>
       </div>
       <div class=\"field\">
         <label for=\"ha_entity_uptime\">Uptime (or Last Boot) Entity</label>
-        <input type=\"text\" name=\"ha_entity_uptime\" id=\"ha_entity_uptime\" value=\"{html.escape(str(cfg.get('ha_entity_uptime', '')))}\" placeholder=\"sensor.last_boot\">
+        <input type=\"text\" name=\"ha_entity_uptime\" id=\"ha_entity_uptime\" value=\"{html.escape(str(cfg.get('ha_entity_uptime', '')))}\" placeholder=\"sensor.last_boot\" list=\"haSensorsList\">
         <div class=\"hint\">Optional. Entity ID for uptime (e.g. <code>sensor.last_boot</code>)</div>
       </div>
       <div class=\"field\">
         <label for=\"ha_entity_disk_read\">Disk Read speed Entity (B/s)</label>
-        <input type=\"text\" name=\"ha_entity_disk_read\" id=\"ha_entity_disk_read\" value=\"{html.escape(str(cfg.get('ha_entity_disk_read', '')))}\" placeholder=\"sensor.disk_read_speed_sda\">
+        <input type=\"text\" name=\"ha_entity_disk_read\" id=\"ha_entity_disk_read\" value=\"{html.escape(str(cfg.get('ha_entity_disk_read', '')))}\" placeholder=\"sensor.disk_read_speed_sda\" list=\"haSensorsList\">
         <div class=\"hint\">Optional. Entity ID for disk read throughput (e.g. <code>sensor.disk_read_speed_sda</code>)</div>
       </div>
       <div class=\"field\">
         <label for=\"ha_entity_disk_write\">Disk Write speed Entity (B/s)</label>
-        <input type=\"text\" name=\"ha_entity_disk_write\" id=\"ha_entity_disk_write\" value=\"{html.escape(str(cfg.get('ha_entity_disk_write', '')))}\" placeholder=\"sensor.disk_write_speed_sda\">
+        <input type=\"text\" name=\"ha_entity_disk_write\" id=\"ha_entity_disk_write\" value=\"{html.escape(str(cfg.get('ha_entity_disk_write', '')))}\" placeholder=\"sensor.disk_write_speed_sda\" list=\"haSensorsList\">
         <div class=\"hint\">Optional. Entity ID for disk write throughput (e.g. <code>sensor.disk_write_speed_sda</code>)</div>
       </div>
       <div class=\"field\">
         <label for=\"ha_entity_fan\">Fan Speed Entity (RPM)</label>
-        <input type=\"text\" name=\"ha_entity_fan\" id=\"ha_entity_fan\" value=\"{html.escape(str(cfg.get('ha_entity_fan', '')))}\" placeholder=\"sensor.fan_speed\">
+        <input type=\"text\" name=\"ha_entity_fan\" id=\"ha_entity_fan\" value=\"{html.escape(str(cfg.get('ha_entity_fan', '')))}\" placeholder=\"sensor.fan_speed\" list=\"haSensorsList\">
         <div class=\"hint\">Optional. Entity ID for fan speed (e.g. <code>sensor.fan_speed</code>)</div>
       </div>
       </div></details>
@@ -4046,6 +4053,7 @@ def create_app(
     </div>
   </div>
 </div>
+<datalist id=\"haSensorsList\"></datalist>
 <script>
 window.__HOST_METRICS_BOOT__ = {{
   nextLogId: {st['next_log_id']},
@@ -4102,6 +4110,12 @@ window.__HOST_METRICS_BOOT__ = {{
         except Exception as e:
             logging.error("HA discovery failed: %s", e)
             return jsonify({"error": str(e)}), 500
+
+    @app.get("/api/ha-entities")
+    def api_ha_entities() -> Any:
+        states = get_home_assistant_all_states()
+        sensors = [s.get("entity_id") for s in states if s.get("entity_id", "").startswith("sensor.")]
+        return jsonify({"sensors": sorted(sensors)})
 
     @app.get("/api/config")
     def api_config() -> Any:

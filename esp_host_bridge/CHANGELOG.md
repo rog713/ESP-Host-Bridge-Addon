@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.03.21.17
+- Added auto-completion for Home Assistant sensors inside the Web UI (Setup tab).
+- Re-enabled native Home Assistant sensor pickers in the Add-on Configuration tab with improved strictness.
+- Added detailed logging for Home Assistant API requests to debug discovery issues.
+
 ## 2026.03.21.16
 - Corrected `baud` default value and list format for the configuration UI.
 - Improved `serial_port` selector to ensure it populates available host devices in the Add-on Configuration tab.

@@ -2071,6 +2071,27 @@ pollStatus();
 pollLogs();
 pollCommLogs();
 
+async function initHaSensorsList() {
+  const list = document.getElementById('haSensorsList');
+  if (!list) return;
+  try {
+    const response = await fetch(getApiUrl('/api/ha-entities'));
+    const data = await response.json();
+    if (data.sensors && Array.isArray(data.sensors)) {
+      list.innerHTML = '';
+      data.sensors.forEach(eid => {
+        const opt = document.createElement('option');
+        opt.value = eid;
+        list.appendChild(opt);
+      });
+      console.log(`Populated ${data.sensors.length} sensors for auto-completion.`);
+    }
+  } catch (err) {
+    console.error('Failed to fetch HA entities:', err);
+  }
+}
+initHaSensorsList();
+
 async function discoverHaProxyEntities() {
   const btn = document.getElementById('discoverHaProxyBtn');
   const res = document.getElementById('discoverHaProxyResult');
