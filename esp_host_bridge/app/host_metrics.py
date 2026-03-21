@@ -757,114 +757,6 @@ def integration_summary_counts(vm_data: list[dict[str, Any]]) -> Dict[str, int]:
     return counts
 
 
-def get_cpu_percent(prev_total: Optional[int], prev_idle: Optional[int]) -> Tuple[float, Optional[int], Optional[int]]:
-    try:
-        line = _read_first_line("/proc/stat")
-        parts = line.split()
-        if len(parts) >= 6 and parts[0] == "cpu":
-            nums = [int(x) for x in parts[1:9]]
-            total = sum(nums)
-            idle = nums[3] + nums[4]
-            if prev_total is None or prev_idle is None:
-                return 0.0, total, idle
-            dt = total - prev_total
-            di = idle - prev_idle
-            if dt <= 0:
-                return 0.0, total, idle
-            pct = (1.0 - (di / dt)) * 100.0
-            return max(0.0, min(100.0, pct)), total, idle
-    except Exception:
-        pass
-    return 0.0, prev_total, prev_idle
-
-
-def get_mem_percent() -> float:
-    try:
-        mem_total = 0
-        mem_avail = 0
-        mem_free = 0
-        mem_buffers = 0
-        mem_cached = 0
-        with open("/proc/meminfo", "r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                parts = line.split()
-                if len(parts) < 2:
-                    continue
-                key = parts[0]
-                try:
-                    val = int(parts[1])
-                except Exception:
-                    continue
-                if key == "MemTotal:":
-                    mem_total = val
-                elif key == "MemAvailable:":
-                    mem_avail = val
-                elif key == "MemFree:":
-                    mem_free = val
-                elif key == "Buffers:":
-                    mem_buffers = val
-                elif key == "Cached:":
-                    mem_cached = val
-        if mem_total > 0:
-            if mem_avail <= 0:
-                mem_avail = mem_free + mem_buffers + mem_cached
-            used = mem_total - mem_avail
-            pct = (used * 100.0) / mem_total
-            return max(0.0, min(100.0, pct))
-    except Exception:
-        pass
-    return 0.0
-
-
-def get_uptime_seconds() -> float:
-    try:
-        line = _read_first_line("/proc/uptime")
-        first = line.split()[0] if line else "0"
-        return safe_float(first, 0.0) or 0.0
-    except Exception:
-        pass
-    return 0.0
-
-
-def _parse_proc_net_dev() -> dict[str, Tuple[float, float]]:
-    out: dict[str, Tuple[float, float]] = {}
-    try:
-        with open("/proc/net/dev", "r", encoding="utf-8", errors="ignore") as f:
-            lines = f.readlines()[2:]
-    except Exception:
-        return out
-    for line in lines:
-        if ":" not in line:
-            continue
-        iface, rest = line.split(":", 1)
-        iface = iface.strip()
-        cols = rest.split()
-        if len(cols) < 16:
-            continue
-        rx = safe_float(cols[0], 0.0) or 0.0
-        tx = safe_float(cols[8], 0.0) or 0.0
-        out[iface] = (rx, tx)
-    return out
-
-
-def get_net_bytes_local(iface_hint: Optional[str] = None, last_iface: Optional[str] = None) -> Tuple[float, float, Optional[str]]:
-    stats = _parse_proc_net_dev()
-    if not stats:
-        return 0.0, 0.0, None
-    if iface_hint and iface_hint in stats:
-        rx, tx = stats[iface_hint]
-        return rx, tx, iface_hint
-    if last_iface and last_iface in stats:
-        rx, tx = stats[last_iface]
-        return rx, tx, last_iface
-    for iface, (rx, tx) in stats.items():
-        if iface.lower() not in {"lo", "loopback", "lo0"}:
-            return rx, tx, iface
-    iface = next(iter(stats.keys()))
-    rx, tx = stats[iface]
-    return rx, tx, iface
-
-
 def _read_temp_millic(path: str) -> Optional[float]:
     try:
         v = float(_read_first_line(path))
@@ -1956,21 +1848,17 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     cpu_available = True
     if ha_cpu is not None:
         cpu_pct = safe_float(ha_cpu, 0.0)
-    elif homeassistant_mode:
+    else:
         cpu_pct = 0.0
         cpu_available = False
-    else:
-        cpu_pct, state.cpu_prev_total, state.cpu_prev_idle = get_cpu_percent(state.cpu_prev_total, state.cpu_prev_idle)
 
     # MEM
     mem_available = True
     if ha_mem is not None:
         mem_pct = safe_float(ha_mem, 0.0)
-    elif homeassistant_mode:
+    else:
         mem_pct = 0.0
         mem_available = False
-    else:
-        mem_pct = get_mem_percent()
 
     # TEMP
     if ha_temp is not None:
@@ -1981,7 +1869,7 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
         cpu_temp_sample = get_cpu_temp_c(getattr(args, 'cpu_temp_sensor', None))
 
     uptime_available = True
-    uptime_s = get_uptime_seconds()
+    uptime_s = 0.0
     if ha_uptime is not None:
         # Check if it's a numeric timestamp (boot_timestamp from host/info or float string)
         # or an ISO timestamp (sensor.last_boot)
@@ -1999,8 +1887,7 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
                     uptime_s = ts
         except Exception:
             uptime_s = safe_float(ha_uptime, uptime_s)
-    elif homeassistant_mode:
-        uptime_s = 0.0
+    else:
         uptime_available = False
 
     cpu_temp_available = cpu_temp_sample is not None
@@ -2159,7 +2046,8 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
         rx_bytes, tx_bytes = 0, 0
         state.active_iface = "HA Proxy"
     else:
-        rx_bytes, tx_bytes, state.active_iface = get_net_bytes_local(args.iface, state.active_iface)
+        # get_net_bytes_local is removed, so we fallback to 0 in standalone mode for now until we fully remove it
+        rx_bytes, tx_bytes, state.active_iface = 0, 0, None
 
     rx_kbps = 0.0
     tx_kbps = 0.0

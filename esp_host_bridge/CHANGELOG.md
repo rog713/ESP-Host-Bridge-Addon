@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.21.43
+- Step 2 of removing local data fetching: Removed local fallback logic for CPU, memory, uptime, and network metrics.
+- Agent now strictly relies on Home Assistant entities for these metrics.
+
 ## 2026.03.21.42
 - Step 1 of removing local data fetching: Removed `psutil` dependency and its related logic.
 
