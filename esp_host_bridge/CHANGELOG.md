@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.21.16
+- Corrected `baud` default value and list format for the configuration UI.
+- Improved `serial_port` selector to ensure it populates available host devices in the Add-on Configuration tab.
+
 ## 2026.03.21.15
 - Refined configuration schema to restore add-on visibility.
 - Enabled native `device` selector for Serial Port (dropdown).
