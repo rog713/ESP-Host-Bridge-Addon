@@ -137,6 +137,9 @@ class RuntimeState:
     ha_addons_api_ok: Optional[bool] = None
     ha_integrations_api_ok: Optional[bool] = None
     ha_activity_api_ok: Optional[bool] = None
+    # HA Host Info Cache
+    ha_host_info: Dict[str, Any] = field(default_factory=dict)
+    last_ha_host_info_ts: float = 0.0
 
 
 def safe_float(v: Any, default: Optional[float] = 0.0) -> Optional[float]:
@@ -2090,7 +2093,17 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     homeassistant_mode = is_home_assistant_app_mode()
     state.ha_token_present = bool(SUPERVISOR_TOKEN)
 
-    # 1. Fetch metrics (Home Assistant Proxy Mode)
+    # 1. Fetch HA Host Info periodically (every 60s)
+    if homeassistant_mode and SUPERVISOR_TOKEN and (now - state.last_ha_host_info_ts) > 60.0:
+        try:
+            res = _supervisor_request_json("/host/info", timeout=args.timeout)
+            if isinstance(res, dict):
+                state.ha_host_info = res
+                state.last_ha_host_info_ts = now
+        except Exception:
+            pass
+
+    # 2. Fetch metrics (Home Assistant Proxy Mode)
     # If HA entities are provided, we pull from them to allow "Green" security rating (no full_access needed)
     def _ha_get(key):
         eid = getattr(args, key, "")
@@ -2111,6 +2124,27 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     ha_fan, _ = _ha_get('ha_entity_fan')
     ha_disk_temp, _ = _ha_get('ha_entity_disk_temp')
     ha_uptime, _ = _ha_get('ha_entity_uptime')
+
+    # Fallbacks from host/info
+    ha_info = state.ha_host_info
+    if homeassistant_mode and ha_info:
+        # Use boot_timestamp if entity is missing
+        if ha_uptime is None and "boot_timestamp" in ha_info:
+            try:
+                # boot_timestamp is usually in microseconds
+                ha_uptime = float(ha_info["boot_timestamp"]) / 1000000.0
+            except Exception:
+                pass
+        
+        # Use disk stats if entity is missing
+        if ha_disk_pct is None and "disk_total" in ha_info and "disk_used" in ha_info:
+            try:
+                total = float(ha_info["disk_total"])
+                used = float(ha_info["disk_used"])
+                if total > 0:
+                    ha_disk_pct = str(round((used / total) * 100.0, 1))
+            except Exception:
+                pass
 
     # Throughput metrics need unit conversion
     ha_net_rx_kbps = _ha_get_conv('ha_entity_net_rx', target_kb=True)
@@ -2149,14 +2183,20 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     uptime_available = True
     uptime_s = get_uptime_seconds()
     if ha_uptime is not None:
-        # Check if it's an ISO timestamp (sensor.last_boot)
+        # Check if it's a numeric timestamp (boot_timestamp from host/info or float string)
+        # or an ISO timestamp (sensor.last_boot)
         try:
             from datetime import datetime
-            if "T" in ha_uptime:
-                boot_dt = datetime.fromisoformat(ha_uptime.replace("Z", "+00:00"))
+            ha_uptime_str = str(ha_uptime)
+            if "T" in ha_uptime_str:
+                boot_dt = datetime.fromisoformat(ha_uptime_str.replace("Z", "+00:00"))
                 uptime_s = max(0.0, time.time() - boot_dt.timestamp())
             else:
-                uptime_s = safe_float(ha_uptime, uptime_s)
+                ts = float(ha_uptime)
+                if ts > 1000000000: # It's a boot timestamp
+                    uptime_s = max(0.0, time.time() - ts)
+                else: # It's an uptime duration in seconds
+                    uptime_s = ts
         except Exception:
             uptime_s = safe_float(ha_uptime, uptime_s)
     elif homeassistant_mode:
@@ -2860,6 +2900,19 @@ class RunnerManager:
         self._ha_activity_api_ok: Optional[bool] = None
         self._ha_activity_last_refresh_at: float = 0.0
         self._ha_activity_last_warn_ts: float = 0.0
+        self._ha_host_info: Dict[str, Any] = {}
+        self._last_ha_host_info_ts: float = 0.0
+
+    def _refresh_ha_host_info(self, timeout: float = 2.0) -> None:
+        now = time.time()
+        if is_home_assistant_app_mode() and SUPERVISOR_TOKEN and (not self._last_ha_host_info_ts or (now - self._last_ha_host_info_ts) > 60.0):
+            try:
+                res = _supervisor_request_json("/host/info", timeout=timeout)
+                if isinstance(res, dict):
+                    self._ha_host_info = res
+                    self._last_ha_host_info_ts = now
+            except Exception:
+                pass
 
     @staticmethod
     def _is_comm_event_line(line: str) -> bool:
@@ -3076,6 +3129,7 @@ class RunnerManager:
     def status(self, cfg: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         if cfg is not None:
             self.refresh_home_assistant_activity(cfg)
+        self._refresh_ha_host_info()
         with self._lock:
             running = self._proc is not None and self._proc.poll() is None
             active_iface = self._last_metrics.get("IFACE") or None
@@ -3086,7 +3140,8 @@ class RunnerManager:
                 if latest_ts is not None:
                     latest_activity_age_s = max(0.0, time.time() - latest_ts)
             return {
-                "host_name": HOST_NAME or None,
+                "host_name": self._ha_host_info.get("hostname", HOST_NAME) or None,
+                "operating_system": self._ha_host_info.get("operating_system") or None,
                 "platform_mode": "homeassistant" if is_home_assistant_app_mode() else "host",
                 "ha_status": {
                     "token_present": bool(SUPERVISOR_TOKEN),

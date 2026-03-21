@@ -372,13 +372,14 @@ function updateHostNameStatus(s) {
   if (!el) return;
   el.classList.remove('ok', 'warn', 'danger');
   const host = (s && typeof s.host_name === 'string') ? s.host_name.trim() : '';
+  const os = (s && typeof s.operating_system === 'string') ? s.operating_system.trim() : '';
   if (!host) {
     el.classList.add('warn');
     el.textContent = 'Host: Unknown';
     return;
   }
   el.classList.add('ok');
-  el.textContent = `Host: ${host}`;
+  el.textContent = os ? `Host: ${host} (${os})` : `Host: ${host}`;
 }
 function updateEspBootHealth(s) {
   const es = (s && s.esp_status && typeof s.esp_status === 'object') ? s.esp_status : {};

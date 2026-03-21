@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.03.21.27
+- Improved auto-telemetry for HA Proxy mode: Uptime and Disk Usage now fallback to Supervisor API data if no specific entities are configured.
+- Added Operating System information to the Host status display.
+- Enhanced HA Proxy integration with microsecond-precision boot time handling.
+
 ## 2026.03.21.26
 - The bridge now fetches the actual system hostname via the Home Assistant API when running in HA mode (replaces the container ID).
 
