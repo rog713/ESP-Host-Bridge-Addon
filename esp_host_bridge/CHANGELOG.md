@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.03.21.02
+- Fixed redundant Telemetry UI showing failed local sensors when in Home Assistant Proxy (Green Mode).
+- Added missing Fan Speed Entity field to the Home Assistant Proxy configuration.
+- Corrected Disk Write speed placeholder in the UI.
+
 ## 2026.03.20.1
 - Initial Home Assistant add-on scaffold for ESP Host Bridge.
 - Bakes Python dependencies into the image at build time.
