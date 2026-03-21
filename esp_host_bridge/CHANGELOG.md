@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.03.21.09
+- Moved all configuration settings to the standard Home Assistant Add-on "Configuration" tab.
+- Added automatic synchronization between Home Assistant options and the Web UI configuration.
+- Added hints in the Web UI about managing settings via the Add-on tab.
+
 ## 2026.03.21.08
 - Unconfigured Home Assistant sensors are now hidden from the dashboard and ESP preview tabs.
 
