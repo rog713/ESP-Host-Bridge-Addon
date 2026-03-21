@@ -48,38 +48,42 @@ Why:
 
 ### Serial
 
-The add-on reads the ESP over `/dev` on the Home Assistant host. The exact device path depends on your system.
+The add-on reads the ESP over `/dev` on the Home Assistant host. The exact device path depends on your system and must be selected in the Add-on Configuration tab.
 
-### Home Assistant Proxy (HA Mode)
+### Pure Home Assistant Proxy
 
-When the add-on detects it is running inside Home Assistant, it uses **HA Proxy mode** (also known as Green Mode).
+The bridge acts strictly as a **Proxy**. It does NOT poll your host hardware directly (no `psutil`, no direct `/proc` reads). This makes it highly secure and compatible with restricted environments.
 
-- **Metrics**: Relies exclusively on Home Assistant entities (specifically the **System Monitor** integration).
-- **Security**: This mode is safer because the add-on does not need direct host hardware access (like `libsensors` or direct `/dev/` block device reads) to pull telemetry.
-- **Auto-Discovery**: Click the "Discover Entities" button in the Web UI (Setup tab) to automatically map your System Monitor sensors.
+- **Metrics**: Relies exclusively on Home Assistant entities.
+- **Sensors Required**: You must install the **System Monitor** integration in Home Assistant to provide the basic metrics (CPU, Memory, Disk, Network, Temp).
+- **Custom Sensors**: If you want GPU metrics or Fan RPM, you must create or install custom sensors in Home Assistant and map their Entity IDs to the bridge.
 
-### Host Mode (Standalone)
+### Configuration (The Two Places)
 
-When running outside of Home Assistant (standalone Docker or script), the agent pulls metrics directly from the host operating system using `/proc` and other local hardware sensors.
+Because the add-on acts as a bridge, its configuration is split into two logical areas:
 
-### Configuration
+1. **Add-on Configuration Tab (Home Assistant UI)**
+   - Used *only* for the hardware USB mapping.
+   - Set the **Serial Port** here so the Docker container can access the ESP device.
 
-Configuration is primarily managed via the **Web UI** (Ingress). Use the **Setup** tab inside the Web UI to:
-- Configure your **Serial Port** and **Baud Rate**.
-- Map Home Assistant **Sensor Entities**.
-- Manage **Add-on** and **Integration** polling intervals.
+2. **Web UI (Ingress)**
+   - Used for all software and metric mapping.
+   - Open the Web UI and go to the **Setup** tab.
+   - **Auto-Discovery**: Click the "Discover Entities" button to automatically map your System Monitor sensors.
+   - Manually enter any custom `sensor.xxx` entities (like `sensor.gpu_temperature`).
+   - Configure polling intervals, baud rate, and power control settings.
 
 ### Add-ons
 
-Add-on data comes from the Supervisor API. No host Docker socket is used.
+Add-on status data is pulled directly from the Supervisor API.
 
 ### Integrations
 
-Integration data comes from Home Assistant Core entity-registry data over the Core WebSocket API. It is a read-only overview.
+Integration data comes from Home Assistant Core entity-registry data over the Core WebSocket API. It provides a read-only overview.
 
 ### Activity
 
-Recent activity comes from the Home Assistant logbook API.
+Recent system activity comes from the Home Assistant logbook API.
 
 ### Host power
 
@@ -90,4 +94,4 @@ Shutdown and restart use the Supervisor host API:
 
 ## Persistence
 
-Host Bridge settings are stored in `/data/config.json`.
+Host Bridge settings configured in the Web UI are stored persistently in `/data/config.json`.
