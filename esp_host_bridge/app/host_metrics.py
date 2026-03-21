@@ -2411,9 +2411,9 @@ def run_agent(args: argparse.Namespace) -> int:
     state = RuntimeState()
     ser = None
     next_serial_retry_at = 0.0
-    debug_mode = str(args.serial_port or "").upper() in ("NONE", "DEBUG")
+    debug_mode = not args.serial_port or str(args.serial_port).upper() in ("NONE", "DEBUG")
     if debug_mode:
-        logging.info("DEBUG MODE: Serial communication is disabled (NONE/DEBUG selected)")
+        logging.info("DEBUG MODE: Serial communication is disabled (Port is empty, NONE, or DEBUG)")
 
     try:
         while True:

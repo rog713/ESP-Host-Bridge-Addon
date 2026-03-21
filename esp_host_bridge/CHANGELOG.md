@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.21.19
+- Simplified configuration schema to guarantee add-on visibility while keeping native device/entity selectors.
+- Improved Debug mode: leaving the Serial Port empty now automatically enables hardware-free logging.
+
 ## 2026.03.21.18
 - Added support for "NONE" or "DEBUG" as the Serial Port to allow testing telemetry without a physical ESP device.
 - Corrected `baud` default type in `config.yaml`.
