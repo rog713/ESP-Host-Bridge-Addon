@@ -741,65 +741,80 @@ def _read_temp_millic(path: str) -> Optional[float]:
 
 def get_cpu_temp_c(sensor_hint: Optional[str] = None) -> Optional[float]:
     hint = (sensor_hint or "").strip().lower()
+
+    # 1. Try psutil sensors
     if psutil:
         try:
             temps = psutil.sensors_temperatures(fahrenheit=False)
+            # If hint is provided, try exact match first
             if hint:
                 for key, entries in temps.items():
                     lk = key.lower()
                     for e in entries:
                         label = (getattr(e, "label", "") or "").lower()
                         current = safe_float(getattr(e, "current", None), None)
-                        if current is None or not (-20.0 <= current <= 150.0):
+                        if current is None or not (-40.0 <= current <= 160.0):
                             continue
                         if hint in {f"psutil:{lk}:{label}", f"{lk}:{label}", label}:
                             return float(current)
+
+            # Look for processor related sensors (similar to System Monitor logic)
+            # Prioritize common CPU/Package labels
             for key, entries in temps.items():
                 lk = key.lower()
                 for e in entries:
                     label = (getattr(e, "label", "") or "").lower()
                     current = safe_float(getattr(e, "current", None), None)
-                    if current is None:
+                    if current is None or not (-40.0 <= current <= 160.0):
                         continue
-                    if any(x in lk for x in ("cpu", "core", "k10", "pkg")) or any(
+                    if any(x in lk for x in ("cpu", "core", "k10", "pkg", "soc", "composite")) or any(
                         x in label for x in ("cpu", "package", "tdie", "core")
                     ):
                         return float(current)
+
+            # Fallback to the very first available sensor if nothing matched
             for entries in temps.values():
                 for e in entries:
                     current = safe_float(getattr(e, "current", None), None)
-                    if current is not None:
+                    if current is not None and (-40.0 <= current <= 160.0):
                         return float(current)
         except Exception:
             pass
 
+    # 2. Try /sys/class/thermal (Linux fallback)
     try:
-        zones = sorted([p for p in os.listdir("/sys/class/thermal") if p.startswith("thermal_zone")])
+        thermal_dir = "/sys/class/thermal"
+        if os.path.isdir(thermal_dir):
+            zones = sorted([p for p in os.listdir(thermal_dir) if p.startswith("thermal_zone")])
+
+            # If hint is a direct path or zone name
+            if hint and (hint.startswith('/sys/') or hint.startswith('thermal_zone')):
+                path = hint if hint.startswith('/') else os.path.join(thermal_dir, hint)
+                temp = _read_temp_millic(os.path.join(path, 'temp'))
+                if temp is not None:
+                    return temp
+
+            # Try to find a processor related typed zone
+            for tz in zones:
+                tpath = os.path.join(thermal_dir, tz, 'type')
+                vpath = os.path.join(thermal_dir, tz, 'temp')
+                try:
+                    ttype = _read_first_line(tpath).lower()
+                except Exception:
+                    ttype = ""
+                temp = _read_temp_millic(vpath)
+                if temp is None:
+                    continue
+                if any(x in ttype for x in ("cpu", "pkg", "package", "x86_pkg", "soc", "composite")):
+                    return temp
+
+            # Final fallback: first available zone
+            for tz in zones:
+                temp = _read_temp_millic(os.path.join(thermal_dir, tz, 'temp'))
+                if temp is not None:
+                    return temp
     except Exception:
-        zones = []
-
-    if hint and hint.startswith('/sys/class/thermal/'):
-        temp = _read_temp_millic(hint.rstrip('/') + '/temp')
-        if temp is not None:
-            return temp
-
-    for tz in zones:
-        tpath = f"/sys/class/thermal/{tz}/type"
-        vpath = f"/sys/class/thermal/{tz}/temp"
-        try:
-            ttype = _read_first_line(tpath).lower()
-        except Exception:
-            ttype = ""
-        temp = _read_temp_millic(vpath)
-        if temp is None:
-            continue
-        if any(x in ttype for x in ("cpu", "pkg", "package", "x86_pkg", "soc")):
-            return temp
-
-    for tz in zones:
-        temp = _read_temp_millic(f"/sys/class/thermal/{tz}/temp")
-        if temp is not None:
-            return temp
+        pass
 
     return None
 
