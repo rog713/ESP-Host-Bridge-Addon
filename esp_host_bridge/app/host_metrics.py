@@ -2133,8 +2133,10 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     # kbps = (B/s * 8) / 1000
     if ha_net_rx is not None:
         rx_kbps = (safe_float(ha_net_rx, 0.0) * 8.0) / 1000.0
+        state.active_iface = "HA Proxy"
     if ha_net_tx is not None:
         tx_kbps = (safe_float(ha_net_tx, 0.0) * 8.0) / 1000.0
+        state.active_iface = "HA Proxy"
 
     disk_read_b, disk_write_b, state.active_disk = get_disk_bytes_local(args.disk_device, state.active_disk)
     disk_r_kbs = 0.0
@@ -2150,8 +2152,10 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     # Bridge expects kB/s.
     if ha_disk_read is not None:
         disk_r_kbs = safe_float(ha_disk_read, 0.0) / 1024.0
+        state.active_disk = "HA Proxy"
     if ha_disk_write is not None:
         disk_w_kbs = safe_float(ha_disk_write, 0.0) / 1024.0
+        state.active_disk = "HA Proxy"
     state.prev_disk_read_b, state.prev_disk_write_b = disk_read_b, disk_write_b
     state.prev_rx, state.prev_tx, state.prev_t = rx_bytes, tx_bytes, now
 

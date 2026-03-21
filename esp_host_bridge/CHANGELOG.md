@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026.03.21.04
+- Fixed Active Interface and Disk incorrectly showing local devices when Home Assistant Proxy is active.
+
 ## 2026.03.21.03
 - Fixed `NameError: name 'st' is not defined` that caused the Web UI to crash.
 
