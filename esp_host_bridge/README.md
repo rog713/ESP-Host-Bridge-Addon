@@ -16,13 +16,14 @@ You must configure the **System Monitor** integration in Home Assistant to provi
 
 If you want to display **GPU Metrics** or **Fan RPM**, you will need to add those specific sensors to Home Assistant (e.g., via HACS integrations or command-line sensors) and then map them in the Web UI.
 
-## Configuration (The Two Places)
+## Configuration (Two Places)
 
 There are two places where configuration is managed:
 
 1. **Add-on Configuration Tab (Home Assistant)**
    - Used *only* for basic hardware mapping.
    - **Serial Port Selector:** Pick the USB device where your ESP is connected.
+   - **Agent Configuration:** Set Baud Rate, Polling Intervals, and toggle Power Control, addons_polling_enabled, integrations_polling_enabled, activity_polling_enabled
 
 2. **Web UI (Ingress) - Primary Configuration**
    - Click "Open Web UI" to access the main configuration interface.

@@ -1,6 +1,10 @@
 # Changelog
 
 ## 2026.03.21.45
+- Final step of removing local data fetching: Removed fallback logic and functions for GPU, Fan RPM, Disk IO, Disk Temperature, Docker (via Unix socket), and VMs (via virsh).
+- Removed `gpu_polling_enabled` and related configuration options as they are now redundant.
+
+## 2026.03.21.44
 - Updated `README.md` and `DOCS.md` to clearly explain the transition to a pure Home Assistant Proxy.
 - Documented the two-place configuration approach (Add-on Tab for Hardware, Web UI for Software/Sensors).
 

@@ -40,17 +40,11 @@ options:
   activity_interval: 10.0
   activity_limit: 12
   activity_lookback_minutes: 180
-  gpu_polling_enabled: true
 schema:
   serial_port: "device(subsystem=tty)?"
   baud: "list(1200|2400|4800|9600|19200|38400|57600|115200|230400|460800|921600|1000000|2000000|4000000)"
   interval: "float(0.1,)"
   timeout: "float(0.1,)"
-  iface: "str?"
-  disk_device: "str?"
-  disk_temp_device: "str?"
-  cpu_temp_sensor: "str?"
-  fan_sensor: "str?"
   power_control_enabled: "bool"
   addons_polling_enabled: "bool"
   addons_interval: "float(0,)"
@@ -60,4 +54,3 @@ schema:
   activity_interval: "float(0,)"
   activity_limit: "int(1,25)"
   activity_lookback_minutes: "int(5,1440)"
-  gpu_polling_enabled: "bool"
