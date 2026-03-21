@@ -42,17 +42,6 @@ options:
   activity_limit: 12
   activity_lookback_minutes: 180
   gpu_polling_enabled: true
-  ha_entity_cpu: "sensor.processor_use"
-  ha_entity_mem: "sensor.memory_use_percent"
-  ha_entity_temp: "sensor.processor_temperature"
-  ha_entity_disk_pct: null
-  ha_entity_net_rx: null
-  ha_entity_net_tx: null
-  ha_entity_fan: null
-  ha_entity_disk_temp: null
-  ha_entity_uptime: "sensor.last_boot"
-  ha_entity_disk_read: null
-  ha_entity_disk_write: null
 schema:
   serial_port: "device(subsystem=tty)?"
   baud: "list(1200|2400|4800|9600|19200|38400|57600|115200|230400|460800|921600|1000000|2000000|4000000)"
@@ -73,14 +62,3 @@ schema:
   activity_limit: "int(1,25)"
   activity_lookback_minutes: "int(5,1440)"
   gpu_polling_enabled: "bool"
-  ha_entity_cpu: "entity(domain=sensor)?"
-  ha_entity_mem: "entity(domain=sensor)?"
-  ha_entity_temp: "entity(domain=sensor)?"
-  ha_entity_disk_pct: "entity(domain=sensor)?"
-  ha_entity_net_rx: "entity(domain=sensor)?"
-  ha_entity_net_tx: "entity(domain=sensor)?"
-  ha_entity_fan: "entity(domain=sensor)?"
-  ha_entity_disk_temp: "entity(domain=sensor)?"
-  ha_entity_uptime: "entity(domain=sensor)?"
-  ha_entity_disk_read: "entity(domain=sensor)?"
-  ha_entity_disk_write: "entity(domain=sensor)?"
