@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.03.21.15
+- Refined configuration schema to restore add-on visibility.
+- Enabled native `device` selector for Serial Port (dropdown).
+- Used standard optional strings for entities to ensure maximum compatibility.
+- Strictly followed "Truly optional" rules for the schema (no defaults for optional fields).
+
 ## 2026.03.21.14
 - Successfully implemented advanced UI selectors for Serial Port (device dropdown) and Home Assistant entities (sensor picker).
 - Switched Baud Rate to a dropdown list for better usability.
