@@ -2384,6 +2384,17 @@ def agent_arg_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument("--shutdown-cmd", default=None, help="Custom host shutdown command")
     ap.add_argument("--restart-cmd", default=None, help="Custom host restart command")
+    ap.add_argument("--ha-entity-cpu", default=None, help="HA Entity ID for CPU usage")
+    ap.add_argument("--ha-entity-mem", default=None, help="HA Entity ID for Memory usage")
+    ap.add_argument("--ha-entity-temp", default=None, help="HA Entity ID for CPU temperature")
+    ap.add_argument("--ha-entity-disk-pct", default=None, help="HA Entity ID for Disk usage percent")
+    ap.add_argument("--ha-entity-net-rx", default=None, help="HA Entity ID for Network RX")
+    ap.add_argument("--ha-entity-net-tx", default=None, help="HA Entity ID for Network TX")
+    ap.add_argument("--ha-entity-fan", default=None, help="HA Entity ID for Fan speed")
+    ap.add_argument("--ha-entity-disk-temp", default=None, help="HA Entity ID for Disk temperature")
+    ap.add_argument("--ha-entity-uptime", default=None, help="HA Entity ID for Uptime")
+    ap.add_argument("--ha-entity-disk-read", default=None, help="HA Entity ID for Disk read speed")
+    ap.add_argument("--ha-entity-disk-write", default=None, help="HA Entity ID for Disk write speed")
     return ap
 
 
@@ -2675,6 +2686,17 @@ def cfg_to_agent_args(cfg: Dict[str, Any]) -> list[str]:
         ("disk_temp_device", "--disk-temp-device"),
         ("cpu_temp_sensor", "--cpu-temp-sensor"),
         ("fan_sensor", "--fan-sensor"),
+        ("ha_entity_cpu", "--ha-entity-cpu"),
+        ("ha_entity_mem", "--ha-entity-mem"),
+        ("ha_entity_temp", "--ha-entity-temp"),
+        ("ha_entity_disk_pct", "--ha-entity-disk-pct"),
+        ("ha_entity_net_rx", "--ha-entity-net-rx"),
+        ("ha_entity_net_tx", "--ha-entity-net-tx"),
+        ("ha_entity_fan", "--ha-entity-fan"),
+        ("ha_entity_disk_temp", "--ha-entity-disk-temp"),
+        ("ha_entity_uptime", "--ha-entity-uptime"),
+        ("ha_entity_disk_read", "--ha-entity-disk-read"),
+        ("ha_entity_disk_write", "--ha-entity-disk-write"),
     ]:
         val = _clean_str(cfg.get(key), "")
         if val:
