@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026.03.21.21
+- Improved sensor auto-discovery with support for German localized names (e.g., `prozessornutzung`).
+- Enhanced internal logging for Home Assistant requests to diagnose discovery and value issues.
+- Refined Web UI logic to more reliably hide dashboard cards and ESP tabs for missing/unconfigured metrics.
+- Fixed auto-completion in the Web UI to show friendly names alongside entity IDs.
+
+## 2026.03.21.20
+- Fixed add-on visibility by using strictly supported schema types (`str` instead of `entity`).
+- Enabled native Serial Port dropdown using the `device` selector.
+- Improved Debug mode: leaving the Serial Port empty now automatically enables hardware-free logging.
+- Corrected baud rate list and default value handling.
+
 ## 2026.03.21.19
 - Simplified configuration schema to guarantee add-on visibility while keeping native device/entity selectors.
 - Improved Debug mode: leaving the Serial Port empty now automatically enables hardware-free logging.

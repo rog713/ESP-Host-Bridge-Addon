@@ -405,9 +405,11 @@ def get_home_assistant_state(entity_id: str, timeout: float = 2.0) -> Optional[s
         # The Supervisor API provides a proxy to the HA Core API at /core/api/states/<entity_id>
         res = _supervisor_request_json(f"/core/api/states/{entity_id}", timeout=timeout)
         if isinstance(res, dict) and "state" in res:
-            return str(res["state"])
-    except Exception:
-        pass
+            val = str(res["state"])
+            logging.info("HA State [%s] = %s", entity_id, val)
+            return val
+    except Exception as e:
+        logging.warning("Failed to fetch HA state for %s: %s", entity_id, e)
     return None
 
 
@@ -441,17 +443,17 @@ def discover_ha_proxy_entities(timeout: float = 5.0) -> Dict[str, str]:
         dev_class = attrs.get("device_class", "")
 
         # CPU Usage
-        if not found.get("ha_entity_cpu") and uom == "%" and _match(eid, ["processor_use", "cpu_usage", "cpu_util", "cpu_percent"]):
+        if not found.get("ha_entity_cpu") and uom == "%" and _match(eid, ["processor_use", "cpu_usage", "cpu_util", "cpu_percent", "prozessornutzung"]):
             found["ha_entity_cpu"] = eid
         # Memory Usage
-        if not found.get("ha_entity_mem") and uom == "%" and _match(eid, ["memory_use_percent", "ram_usage", "memory_usage"]):
+        if not found.get("ha_entity_mem") and uom == "%" and _match(eid, ["memory_use_percent", "ram_usage", "memory_usage", "arbeitsspeicherauslastung"]):
             found["ha_entity_mem"] = eid
         # Temperature
-        if not found.get("ha_entity_temp") and uom in ["°C", "°F"] and _match(eid, ["processor_temperature", "cpu_temp", "thermal"]):
+        if not found.get("ha_entity_temp") and uom in ["°C", "°F"] and _match(eid, ["processor_temperature", "cpu_temp", "thermal", "prozessortemperatur"]):
             if "disk" not in eid.lower() and "gpu" not in eid.lower():
                  found["ha_entity_temp"] = eid
         # Disk Usage
-        if not found.get("ha_entity_disk_pct") and uom == "%" and _match(eid, ["disk_usage", "disk_use", "storage_usage"]):
+        if not found.get("ha_entity_disk_pct") and uom == "%" and _match(eid, ["disk_usage", "disk_use", "storage_usage", "massenspeicher_auslastung"]):
              found["ha_entity_disk_pct"] = eid
         # Network RX
         if not found.get("ha_entity_net_rx") and (uom in ["B/s", "kB/s", "MB/s", "GiB/s", "KiB/s", "MiB/s"] or dev_class == "data_rate") and _match(eid, ["network_throughput_in", "network_in", "rx_speed", "eingehender_netzwerkdurchsatz"]):
@@ -460,7 +462,7 @@ def discover_ha_proxy_entities(timeout: float = 5.0) -> Dict[str, str]:
         if not found.get("ha_entity_net_tx") and (uom in ["B/s", "kB/s", "MB/s", "GiB/s", "KiB/s", "MiB/s"] or dev_class == "data_rate") and _match(eid, ["network_throughput_out", "network_out", "tx_speed", "ausgehender_netzwerkdurchsatz"]):
              found["ha_entity_net_tx"] = eid
         # Uptime
-        if not found.get("ha_entity_uptime") and (dev_class in ["timestamp", "duration"] or _match(eid, ["last_boot", "uptime"])):
+        if not found.get("ha_entity_uptime") and (dev_class in ["timestamp", "duration"] or _match(eid, ["last_boot", "uptime", "letzter_systemstart"])):
              found["ha_entity_uptime"] = eid
         # Disk Read
         if not found.get("ha_entity_disk_read") and (uom in ["B/s", "kB/s", "MB/s"] or dev_class == "data_rate") and _match(eid, ["disk_read_speed", "disk_read"]):
@@ -4122,8 +4124,14 @@ window.__HOST_METRICS_BOOT__ = {{
     @app.get("/api/ha-entities")
     def api_ha_entities() -> Any:
         states = get_home_assistant_all_states()
-        sensors = [s.get("entity_id") for s in states if s.get("entity_id", "").startswith("sensor.")]
-        return jsonify({"sensors": sorted(sensors)})
+        sensors = []
+        for s in states:
+            eid = s.get("entity_id", "")
+            if eid.startswith("sensor."):
+                friendly = s.get("attributes", {}).get("friendly_name", eid)
+                sensors.append({"id": eid, "name": friendly})
+        sensors.sort(key=lambda x: x["id"])
+        return jsonify({"sensors": sensors})
 
     @app.get("/api/config")
     def api_config() -> Any:

@@ -2079,9 +2079,10 @@ async function initHaSensorsList() {
     const data = await response.json();
     if (data.sensors && Array.isArray(data.sensors)) {
       list.innerHTML = '';
-      data.sensors.forEach(eid => {
+      data.sensors.forEach(s => {
         const opt = document.createElement('option');
-        opt.value = eid;
+        opt.value = s.id;
+        opt.textContent = s.name;
         list.appendChild(opt);
       });
       console.log(`Populated ${data.sensors.length} sensors for auto-completion.`);
