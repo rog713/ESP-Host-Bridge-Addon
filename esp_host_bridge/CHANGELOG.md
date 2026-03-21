@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.21.44
+- Final step of removing local data fetching: Removed fallback logic and functions for GPU, Fan RPM, Disk IO, Disk Temperature, Docker (via Unix socket), and VMs (via virsh).
+- The agent is now strictly a Home Assistant proxy and relies exclusively on HA entities and the Supervisor API.
+
 ## 2026.03.21.43
 - Step 2 of removing local data fetching: Removed local fallback logic for CPU, memory, uptime, and network metrics.
 - Agent now strictly relies on Home Assistant entities for these metrics.

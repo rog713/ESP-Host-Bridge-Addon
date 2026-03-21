@@ -757,94 +757,6 @@ def integration_summary_counts(vm_data: list[dict[str, Any]]) -> Dict[str, int]:
     return counts
 
 
-def _read_temp_millic(path: str) -> Optional[float]:
-    try:
-        v = float(_read_first_line(path))
-    except Exception:
-        return None
-    if v > 1000.0:
-        return v / 1000.0
-    if -50.0 <= v <= 150.0:
-        return v
-    return None
-
-
-def get_cpu_temp_c(sensor_hint: Optional[str] = None) -> Optional[float]:
-    hint = (sensor_hint or "").strip().lower()
-
-    # 1. Try /sys/class/thermal (Linux fallback)
-    try:
-        thermal_dir = "/sys/class/thermal"
-        if os.path.isdir(thermal_dir):
-            zones = sorted([p for p in os.listdir(thermal_dir) if p.startswith("thermal_zone")])
-
-            # If hint is a direct path or zone name
-            if hint and (hint.startswith('/sys/') or hint.startswith('thermal_zone')):
-                path = hint if hint.startswith('/') else os.path.join(thermal_dir, hint)
-                temp = _read_temp_millic(os.path.join(path, 'temp'))
-                if temp is not None:
-                    return temp
-
-            # Try to find a processor related typed zone
-            for tz in zones:
-                tpath = os.path.join(thermal_dir, tz, 'type')
-                vpath = os.path.join(thermal_dir, tz, 'temp')
-                try:
-                    ttype = _read_first_line(tpath).lower()
-                except Exception:
-                    ttype = ""
-                temp = _read_temp_millic(vpath)
-                if temp is None:
-                    continue
-                if any(x in ttype for x in ("cpu", "pkg", "package", "x86_pkg", "soc", "composite")):
-                    return temp
-
-            # Final fallback: first available zone
-            for tz in zones:
-                temp = _read_temp_millic(os.path.join(thermal_dir, tz, 'temp'))
-                if temp is not None:
-                    return temp
-    except Exception:
-        pass
-
-    return None
-
-
-
-def get_fan_rpm(sensor_hint: Optional[str] = None) -> Optional[float]:
-    hint = (sensor_hint or "").strip().lower()
-    try:
-        for hw in sorted(os.listdir('/sys/class/hwmon')):
-            base = f'/sys/class/hwmon/{hw}'
-            if hint.startswith(base.lower() + '/fan') and hint.endswith('_input'):
-                v = safe_float(_read_first_line(hint), None)
-                if v is not None and v >= 0:
-                    return float(v)
-            for name in sorted(os.listdir(base)):
-                if not re.match(r'fan\d+_input$', name):
-                    continue
-                v = safe_float(_read_first_line(f'{base}/{name}'), None)
-                if v is not None and v >= 0:
-                    return float(v)
-    except Exception:
-        pass
-    return None
-
-
-def get_disk_usage_pct(disk_hint: Optional[str] = None, active_disk: Optional[str] = None) -> float:
-    try:
-        st = os.statvfs('/')
-        total = float(st.f_blocks) * float(st.f_frsize)
-
-        avail = float(st.f_bavail) * float(st.f_frsize)
-        used = max(0.0, total - avail)
-        if total > 0:
-            return (used * 100.0) / total
-    except Exception:
-        pass
-    return 0.0
-
-
 def addon_summary_counts(docker_data: list[dict[str, Any]]) -> Dict[str, int]:
     counts = {"running": 0, "stopped": 0, "unhealthy": 0}
     for c in docker_data:
@@ -861,192 +773,6 @@ def addon_summary_counts(docker_data: list[dict[str, Any]]) -> Dict[str, int]:
         if 'unhealthy' in combined:
             counts['unhealthy'] += 1
     return counts
-
-
-def get_gpu_metrics(timeout: float) -> Dict[str, Any]:
-    out: Dict[str, Any] = {"temp_c": 0.0, "util_pct": 0.0, "mem_pct": 0.0, "available": False}
-    try:
-        p = subprocess.run(
-            [
-                'nvidia-smi',
-                '--query-gpu=temperature.gpu,utilization.gpu,memory.used,memory.total',
-                '--format=csv,noheader,nounits',
-            ],
-            capture_output=True,
-            text=True,
-            timeout=max(1.0, float(timeout)),
-            check=False,
-        )
-        if p.returncode == 0 and p.stdout:
-            temps: list[float] = []
-            utils: list[float] = []
-            mem_pcts: list[float] = []
-            for line in p.stdout.splitlines():
-                parts = [x.strip() for x in line.split(',')]
-                if len(parts) < 4:
-                    continue
-                t = safe_float(parts[0], None)
-                u = safe_float(parts[1], None)
-                mu = safe_float(parts[2], None)
-                mt = safe_float(parts[3], None)
-                if t is not None and -20.0 <= t <= 150.0:
-                    temps.append(float(t))
-                if u is not None and 0.0 <= u <= 100.0:
-                    utils.append(float(u))
-                if mu is not None and mt and mt > 0:
-                    mem_pcts.append(max(0.0, min(100.0, (float(mu) * 100.0) / float(mt))))
-            if temps:
-                out['temp_c'] = max(temps)
-            if utils:
-                out['util_pct'] = max(utils)
-            if mem_pcts:
-                out['mem_pct'] = max(mem_pcts)
-            if temps or utils or mem_pcts:
-                out['available'] = True
-    except Exception:
-        pass
-    return out
-
-
-def _extract_temp_from_text(text: str) -> Optional[float]:
-    for line in text.splitlines():
-        ll = line.lower()
-        if "temperature" not in ll and "composite" not in ll:
-            continue
-        nums = re.findall(r"-?\d+(?:\.\d+)?", line)
-        for n in nums:
-            v = safe_float(n, None)
-            if v is None:
-                continue
-            if -20.0 <= v <= 150.0:
-                return float(v)
-    return None
-
-
-def _normalize_disk_name(v: Optional[str]) -> Optional[str]:
-    if not v:
-        return None
-    s = str(v).strip()
-    if not s:
-        return None
-    if s.startswith("/dev/"):
-        s = s[5:]
-    if s.startswith("nvme") and "p" in s:
-        s = re.sub(r"p\d+$", "", s)
-    s = re.sub(r"\d+$", "", s)
-    return s
-
-
-def _disk_candidates(device_hint: Optional[str]) -> list[str]:
-    out: list[str] = []
-    seen: set[str] = set()
-
-    def add(path: str) -> None:
-        if path not in seen:
-            seen.add(path)
-            out.append(path)
-
-    hint_name = _normalize_disk_name(device_hint)
-    if hint_name:
-        add(f"/dev/{hint_name}")
-    for d in ["/dev/nvme0", "/dev/nvme0n1", "/dev/sda"]:
-        add(d)
-    return out
-
-
-def get_disk_temp_c(timeout: float, disk_device: Optional[str] = None) -> Optional[float]:
-    hint_name = _normalize_disk_name(disk_device)
-    for dev in _disk_candidates(disk_device):
-        for cmd in (["nvme", "smart-log", dev], ["smartctl", "-A", dev]):
-            try:
-                p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
-            except Exception:
-                continue
-            text = (p.stdout or "") + "\n" + (p.stderr or "")
-            t = _extract_temp_from_text(text)
-            if t is not None:
-                return t
-    return None
-
-
-def _read_diskstats() -> dict[str, tuple[float, float]]:
-    out: dict[str, tuple[float, float]] = {}
-    try:
-        with open("/proc/diskstats", "r", encoding="utf-8", errors="ignore") as f:
-            lines = f.readlines()
-    except Exception:
-        return out
-
-    for line in lines:
-        cols = line.split()
-        if len(cols) < 14:
-            continue
-        name = cols[2]
-        if re.search(r"\d+$", name) and not name.startswith("nvme"):
-            continue
-        if name.startswith(("loop", "ram", "dm-", "sr", "zram", "md")):
-            continue
-        if name.startswith("nvme") and re.search(r"p\d+$", name):
-            continue
-        try:
-            sectors_read = float(cols[5])
-            sectors_written = float(cols[9])
-        except Exception:
-            continue
-        out[name] = (sectors_read * 512.0, sectors_written * 512.0)
-    return out
-
-
-def get_disk_bytes_local(disk_hint: Optional[str] = None, last_disk: Optional[str] = None) -> tuple[float, float, Optional[str]]:
-    stats = _read_diskstats()
-    if not stats:
-        return 0.0, 0.0, None
-
-    hint_name = _normalize_disk_name(disk_hint)
-    if hint_name:
-        if hint_name in stats:
-            rb, wb = stats[hint_name]
-            return rb, wb, hint_name
-        for name in stats:
-            if name.startswith(hint_name):
-                rb, wb = stats[name]
-                return rb, wb, name
-
-    if last_disk and last_disk in stats:
-        rb, wb = stats[last_disk]
-        return rb, wb, last_disk
-
-    for name in sorted(stats.keys()):
-        if name.startswith(("nvme", "sd", "vd", "xvd", "mmcblk", "disk")):
-            rb, wb = stats[name]
-            return rb, wb, name
-
-    name = next(iter(stats.keys()))
-    rb, wb = stats[name]
-    return rb, wb, name
-
-
-def get_docker_containers_from_engine(socket_path: str, timeout: float) -> Any:
-    class UnixHTTPConnection(http.client.HTTPConnection):
-        def __init__(self, unix_socket_path: str, timeout_s: float):
-            super().__init__("localhost", timeout=timeout_s)
-            self.unix_socket_path = unix_socket_path
-
-        def connect(self) -> None:
-            self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            self.sock.settimeout(self.timeout)
-            self.sock.connect(self.unix_socket_path)
-
-    conn = UnixHTTPConnection(socket_path, timeout)
-    try:
-        conn.request("GET", "/containers/json?all=1")
-        resp = conn.getresponse()
-        body = resp.read()
-        if resp.status >= 400:
-            raise RuntimeError(f"Docker API HTTP {resp.status}: {body[:200]!r}")
-        return json.loads(body.decode("utf-8", errors="ignore"))
-    finally:
-        conn.close()
 
 
 def _run_command_capture(argv: list[str], timeout: float) -> subprocess.CompletedProcess[str]:
@@ -1710,14 +1436,7 @@ def process_usb_commands(
     ser: Any,
     rx_buf: str,
     allow_host_cmds: bool = False,
-    homeassistant_mode: bool = False,
-    host_cmd_use_sudo: bool = False,
-    docker_socket: str = "/var/run/docker.sock",
-    virsh_binary: str = "virsh",
-    virsh_uri: Optional[str] = None,
     timeout: float = 2.0,
-    shutdown_cmd: Optional[str] = None,
-    restart_cmd: Optional[str] = None,
 ) -> str:
     try:
         n = ser.in_waiting
@@ -1744,11 +1463,7 @@ def process_usb_commands(
             continue
         cmd = line.split("=", 1)[1].strip()
         if allow_host_cmds:
-            if homeassistant_mode and execute_home_assistant_addon_command(cmd, timeout):
-                continue
-            if execute_docker_command(cmd, docker_socket, timeout):
-                continue
-            if execute_virsh_command(cmd, virsh_binary, virsh_uri, timeout):
+            if execute_home_assistant_addon_command(cmd, timeout):
                 continue
             power_state = command_to_power_state(cmd)
             if power_state:
@@ -1760,15 +1475,9 @@ def process_usb_commands(
                     time.sleep(0.15)
                 except Exception as e:
                     logging.warning("failed to send power state to device (%s)", e)
-            if homeassistant_mode and power_state:
+            if power_state:
                 execute_home_assistant_host_power_command(cmd, timeout)
                 continue
-            execute_host_command(
-                cmd,
-                use_sudo=host_cmd_use_sudo,
-                shutdown_cmd=shutdown_cmd,
-                restart_cmd=restart_cmd,
-            )
         else:
             logging.info("host command received but disabled (CMD=%s)", cmd)
 
@@ -1779,11 +1488,10 @@ def process_usb_commands(
 
 def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     now = time.time()
-    homeassistant_mode = is_home_assistant_app_mode()
     state.ha_token_present = bool(SUPERVISOR_TOKEN)
 
     # 1. Fetch HA Host Info periodically (every 60s)
-    if homeassistant_mode and SUPERVISOR_TOKEN and (now - state.last_ha_host_info_ts) > 60.0:
+    if SUPERVISOR_TOKEN and (now - state.last_ha_host_info_ts) > 60.0:
         try:
             res = _supervisor_request_json("/host/info", timeout=args.timeout)
             if isinstance(res, dict):
@@ -1793,16 +1501,15 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
             pass
 
     # 2. Fetch metrics (Home Assistant Proxy Mode)
-    # If HA entities are provided, we pull from them to allow "Green" security rating (no full_access needed)
     def _ha_get(key):
         eid = getattr(args, key, "")
-        if homeassistant_mode and eid and eid.strip():
+        if eid and eid.strip():
             return get_home_assistant_state(eid, timeout=args.timeout)
         return None, {}
 
     def _ha_get_conv(key, target_kb):
         eid = getattr(args, key, "")
-        if homeassistant_mode and eid and eid.strip():
+        if eid and eid.strip():
             return get_home_assistant_metric_converted(eid, timeout=args.timeout, target_kb=target_kb)
         return None
 
@@ -1819,7 +1526,7 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
 
     # Fallbacks from host/info
     ha_info = state.ha_host_info
-    if homeassistant_mode and ha_info:
+    if ha_info:
         # Use boot_timestamp if entity is missing
         if ha_uptime is None and "boot_timestamp" in ha_info:
             try:
@@ -1863,10 +1570,8 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     # TEMP
     if ha_temp is not None:
         cpu_temp_sample = safe_float(ha_temp, None)
-    elif homeassistant_mode:
-        cpu_temp_sample = None
     else:
-        cpu_temp_sample = get_cpu_temp_c(getattr(args, 'cpu_temp_sensor', None))
+        cpu_temp_sample = None
 
     uptime_available = True
     uptime_s = 0.0
@@ -1892,51 +1597,42 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
 
     cpu_temp_available = cpu_temp_sample is not None
     cpu_temp = float(cpu_temp_sample or 0.0)
+    
     if (now - state.last_disk_temp_ts) >= DISK_TEMP_REFRESH_SECONDS:
         if ha_disk_temp is not None:
             disk_temp_sample = safe_float(ha_disk_temp, None)
-        elif homeassistant_mode:
-            disk_temp_sample = None
         else:
-            disk_temp_sample = get_disk_temp_c(args.timeout, args.disk_temp_device or args.disk_device)
+            disk_temp_sample = None
         state.disk_temp_c = float(disk_temp_sample or 0.0)
         state.disk_temp_available = disk_temp_sample is not None
         state.last_disk_temp_ts = now
     disk_temp_available = bool(getattr(state, "disk_temp_available", False))
+    
     disk_usage_available = True
     if (now - state.last_disk_usage_ts) >= DISK_USAGE_REFRESH_SECONDS:
         if ha_disk_pct is not None:
             state.disk_usage_pct = safe_float(ha_disk_pct, 0.0)
-        elif homeassistant_mode:
+        else:
             state.disk_usage_pct = 0.0
             disk_usage_available = False
-        else:
-            state.disk_usage_pct = get_disk_usage_pct(args.disk_device, state.active_disk)
         state.last_disk_usage_ts = now
-    elif homeassistant_mode and not ha_disk_pct:
+    elif not ha_disk_pct:
         disk_usage_available = False
+        
     gpu_enabled = not bool(getattr(args, "disable_gpu_polling", False))
     if (now - state.last_slow_sensor_ts) >= SLOW_SENSOR_REFRESH_SECONDS:
         if ha_fan is not None:
             fan_rpm_sample = safe_float(ha_fan, 0.0)
-        elif homeassistant_mode:
-            fan_rpm_sample = None
         else:
-            fan_rpm_sample = get_fan_rpm(getattr(args, 'fan_sensor', None))
+            fan_rpm_sample = None
         state.fan_rpm = float(fan_rpm_sample or 0.0)
         state.fan_available = fan_rpm_sample is not None
+        
         if gpu_enabled:
-            if homeassistant_mode:
-                state.gpu_util_pct = safe_float(ha_gpu_util, 0.0)
-                state.gpu_temp_c = safe_float(ha_gpu_temp, 0.0)
-                state.gpu_mem_pct = safe_float(ha_gpu_vram, 0.0)
-                state.gpu_available = any(x is not None for x in [ha_gpu_util, ha_gpu_temp, ha_gpu_vram])
-            else:
-                gpu = get_gpu_metrics(args.timeout)
-                state.gpu_temp_c = float(gpu.get('temp_c', 0.0) or 0.0)
-                state.gpu_util_pct = float(gpu.get('util_pct', 0.0) or 0.0)
-                state.gpu_mem_pct = float(gpu.get('mem_pct', 0.0) or 0.0)
-                state.gpu_available = bool(gpu.get('available', False))
+            state.gpu_util_pct = safe_float(ha_gpu_util, 0.0)
+            state.gpu_temp_c = safe_float(ha_gpu_temp, 0.0)
+            state.gpu_mem_pct = safe_float(ha_gpu_vram, 0.0)
+            state.gpu_available = any(x is not None for x in [ha_gpu_util, ha_gpu_temp, ha_gpu_vram])
         else:
             state.gpu_temp_c = 0.0
             state.gpu_util_pct = 0.0
@@ -1950,23 +1646,13 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     addons_interval = max(0.0, float(getattr(args, "docker_interval", 2.0) or 0.0))
     if addons_enabled and addons_interval > 0.0 and (not state.last_addons_refresh_ts or (now - state.last_addons_refresh_ts) >= addons_interval):
         try:
-            if homeassistant_mode:
-                addons = get_home_assistant_addons(timeout=args.timeout)
-            else:
-                addons = get_docker_containers_from_engine(args.docker_socket, timeout=args.timeout)
-            state.ha_addons_api_ok = True if homeassistant_mode else None
+            addons = get_home_assistant_addons(timeout=args.timeout)
+            state.ha_addons_api_ok = True
         except Exception as e:
             addons = []
-            state.ha_addons_api_ok = False if homeassistant_mode else None
+            state.ha_addons_api_ok = False
             if (now - state.last_addons_warn_ts) >= DOCKER_WARN_INTERVAL_SECONDS:
-                if homeassistant_mode:
-                    logging.warning("Home Assistant add-on API unavailable; continuing without add-on data (%s)", e)
-                else:
-                    logging.warning(
-                        "Docker API unavailable via %s; continuing without docker data (%s)",
-                        args.docker_socket,
-                        e,
-                    )
+                logging.warning("Home Assistant add-on API unavailable; continuing without add-on data (%s)", e)
                 state.last_addons_warn_ts = now
         addons = normalize_addon_data(addons)
         state.cached_addons = addons
@@ -1978,31 +1664,19 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     else:
         addons = []
         addon_counts = {"running": 0, "stopped": 0, "unhealthy": 0}
-        if homeassistant_mode:
-            state.ha_addons_api_ok = None
+        state.ha_addons_api_ok = None
 
     integrations_enabled = not bool(getattr(args, "disable_vm_polling", False))
     integrations_interval = max(0.0, float(getattr(args, "vm_interval", 5.0) or 0.0))
     if integrations_enabled and integrations_interval > 0.0 and (not state.last_integrations_refresh_ts or (now - state.last_integrations_refresh_ts) >= integrations_interval):
         try:
-            if homeassistant_mode:
-                integrations = get_home_assistant_integrations(timeout=args.timeout)
-            else:
-                integrations = get_virtual_machines_from_virsh(args.virsh_binary, args.virsh_uri, timeout=args.timeout)
-            state.ha_integrations_api_ok = True if homeassistant_mode else None
+            integrations = get_home_assistant_integrations(timeout=args.timeout)
+            state.ha_integrations_api_ok = True
         except Exception as e:
             integrations = []
-            state.ha_integrations_api_ok = False if homeassistant_mode else None
+            state.ha_integrations_api_ok = False
             if (now - state.last_virsh_warn_ts) >= VIRSH_WARN_INTERVAL_SECONDS:
-                if homeassistant_mode:
-                    logging.warning("Home Assistant integration registry unavailable; continuing without integration data (%s)", e)
-                else:
-                    logging.warning(
-                        "virsh unavailable via %s%s; continuing without VM data (%s)",
-                        args.virsh_binary,
-                        f" -c {args.virsh_uri}" if args.virsh_uri else "",
-                        e,
-                    )
+                logging.warning("Home Assistant integration registry unavailable; continuing without integration data (%s)", e)
                 state.last_virsh_warn_ts = now
         state.cached_integrations = integrations
         state.cached_integration_counts = integration_summary_counts(integrations)
@@ -2013,10 +1687,9 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     else:
         integrations = []
         integration_counts = {"running": 0, "stopped": 0, "paused": 0, "other": 0}
-        if homeassistant_mode:
-            state.ha_integrations_api_ok = None
+        state.ha_integrations_api_ok = None
 
-    activity_enabled = homeassistant_mode and not bool(getattr(args, "disable_activity_polling", False))
+    activity_enabled = not bool(getattr(args, "disable_activity_polling", False))
     activity_interval = max(0.0, float(getattr(args, "activity_interval", 10.0) or 0.0))
     activity_limit = max(1, min(25, safe_int(getattr(args, "activity_limit", 12), 12) or 12))
     activity_lookback_minutes = max(5, min(1440, safe_int(getattr(args, "activity_lookback_minutes", 180), 180) or 180))
@@ -2042,63 +1715,29 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
         activity_rows = []
         state.ha_activity_api_ok = None
 
-    if homeassistant_mode:
-        rx_bytes, tx_bytes = 0, 0
-        state.active_iface = "HA Proxy"
-    else:
-        # get_net_bytes_local is removed, so we fallback to 0 in standalone mode for now until we fully remove it
-        rx_bytes, tx_bytes, state.active_iface = 0, 0, None
-
+    state.active_iface = "HA Proxy"
     rx_kbps = 0.0
     tx_kbps = 0.0
-    dt = 0.0
-    if state.prev_t is not None and now > state.prev_t:
-        dt = now - state.prev_t
-        if not homeassistant_mode:
-            if state.prev_rx is not None and rx_bytes >= state.prev_rx:
-                rx_kbps = ((rx_bytes - state.prev_rx) * 8.0) / 1000.0 / dt
-            if state.prev_tx is not None and tx_bytes >= state.prev_tx:
-                tx_kbps = ((tx_bytes - state.prev_tx) * 8.0) / 1000.0 / dt
-
     net_available = True
     if ha_net_rx_kbps is not None:
         rx_kbps = ha_net_rx_kbps
-        state.active_iface = "HA Proxy"
-    elif homeassistant_mode:
+    else:
         net_available = False
     if ha_net_tx_kbps is not None:
         tx_kbps = ha_net_tx_kbps
-        state.active_iface = "HA Proxy"
         net_available = True
 
-    if homeassistant_mode:
-        disk_read_b, disk_write_b = 0, 0
-        state.active_disk = "HA Proxy"
-    else:
-        disk_read_b, disk_write_b, state.active_disk = get_disk_bytes_local(args.disk_device, state.active_disk)
-
+    state.active_disk = "HA Proxy"
     disk_io_available = True
     disk_r_kbs = 0.0
     disk_w_kbs = 0.0
-    if dt > 0.0 and not homeassistant_mode:
-        if state.prev_disk_read_b is not None and disk_read_b >= state.prev_disk_read_b:
-            disk_r_kbs = (disk_read_b - state.prev_disk_read_b) / 1024.0 / dt
-        if state.prev_disk_write_b is not None and disk_write_b >= state.prev_disk_write_b:
-            disk_w_kbs = (disk_write_b - state.prev_disk_write_b) / 1024.0 / dt
-    elif homeassistant_mode:
-        disk_io_available = False
-
-    # Overwrite with HA Proxy if enabled.
     if ha_disk_read_kbs is not None:
         disk_r_kbs = ha_disk_read_kbs
-        state.active_disk = "HA Proxy"
-        disk_io_available = True
+    else:
+        disk_io_available = False
     if ha_disk_write_kbs is not None:
         disk_w_kbs = ha_disk_write_kbs
-        state.active_disk = "HA Proxy"
         disk_io_available = True
-    state.prev_disk_read_b, state.prev_disk_write_b = disk_read_b, disk_write_b
-    state.prev_rx, state.prev_tx, state.prev_t = rx_bytes, tx_bytes, now
 
     addons_compact = compact_addons(addons)
     integrations_compact = compact_integrations(integrations)
@@ -2135,7 +1774,7 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
             f"{net_tx_val}"
             f"IFACE={state.active_iface or ''},"
             f"TEMPAV={1 if cpu_temp_available else 0},"
-            f"HAMODE={1 if homeassistant_mode else 0},"
+            f"HAMODE=1,"
             f"HATOKEN={1 if state.ha_token_present else 0},"
             f"HAADDONSAPI={ha_addons_api},"
             f"HAINTEGRATIONSAPI={ha_integrations_api},"
@@ -2194,12 +1833,8 @@ def agent_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--baud", type=int, default=115200)
     ap.add_argument("--interval", type=float, default=1.0)
     ap.add_argument("--timeout", type=float, default=2.0)
-    ap.add_argument("--iface", default=None, help="Network interface name, e.g. eth0")
-    ap.add_argument("--docker-socket", default="/var/run/docker.sock", help="Docker Engine Unix socket path")
     ap.add_argument("--docker-interval", type=float, default=2.0, help="Docker refresh interval in seconds (0 disables polling)")
     ap.add_argument("--disable-docker-polling", action="store_true", help="Disable Docker polling entirely")
-    ap.add_argument("--virsh-binary", default="virsh", help="virsh executable path")
-    ap.add_argument("--virsh-uri", default=None, help="Optional virsh connection URI, e.g. qemu:///system")
     ap.add_argument("--vm-interval", type=float, default=5.0, help="VM refresh interval in seconds (0 disables polling)")
     ap.add_argument("--disable-vm-polling", action="store_true", help="Disable VM polling entirely")
     ap.add_argument("--activity-interval", type=float, default=10.0, help="Home Assistant activity refresh interval in seconds (0 disables polling)")
@@ -2207,22 +1842,11 @@ def agent_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--activity-lookback-minutes", type=int, default=180, help="How far back the Home Assistant logbook query should search")
     ap.add_argument("--disable-activity-polling", action="store_true", help="Disable Home Assistant activity polling entirely")
     ap.add_argument("--disable-gpu-polling", action="store_true", help="Disable GPU polling entirely")
-    ap.add_argument("--disk-device", default=None, help="Disk device for throughput (e.g. /dev/nvme0n1 or sda)")
-    ap.add_argument("--disk-temp-device", default=None, help="Disk device for temperature (e.g. /dev/nvme0n1)")
-    ap.add_argument("--cpu-temp-sensor", default=None, help="Preferred CPU/core temperature sensor identifier")
-    ap.add_argument("--fan-sensor", default=None, help="Preferred fan sensor identifier")
     ap.add_argument(
         "--allow-host-cmds",
         action="store_true",
         help="Execute host actions from USB CDC commands (shutdown/restart/docker_start/docker_stop/vm_start/vm_stop/vm_force_stop/vm_restart)",
     )
-    ap.add_argument(
-        "--host-cmd-use-sudo",
-        action="store_true",
-        help="Run host commands via sudo (requires sudoers rule)",
-    )
-    ap.add_argument("--shutdown-cmd", default=None, help="Custom host shutdown command")
-    ap.add_argument("--restart-cmd", default=None, help="Custom host restart command")
     ap.add_argument("--ha-entity-cpu", default=None, help="HA Entity ID for CPU usage")
     ap.add_argument("--ha-entity-mem", default=None, help="HA Entity ID for Memory usage")
     ap.add_argument("--ha-entity-temp", default=None, help="HA Entity ID for CPU temperature")
