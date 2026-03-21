@@ -2071,19 +2071,31 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
 
     # 1. Fetch metrics (Home Assistant Proxy Mode)
     # If HA entities are provided, we pull from them to allow "Green" security rating (no full_access needed)
-    ha_cpu, _ = get_home_assistant_state(getattr(args, 'ha_entity_cpu', ''), timeout=args.timeout) if homeassistant_mode else (None, {})
-    ha_mem, _ = get_home_assistant_state(getattr(args, 'ha_entity_mem', ''), timeout=args.timeout) if homeassistant_mode else (None, {})
-    ha_temp, _ = get_home_assistant_state(getattr(args, 'ha_entity_temp', ''), timeout=args.timeout) if homeassistant_mode else (None, {})
-    ha_disk_pct, _ = get_home_assistant_state(getattr(args, 'ha_entity_disk_pct', ''), timeout=args.timeout) if homeassistant_mode else (None, {})
-    ha_fan, _ = get_home_assistant_state(getattr(args, 'ha_entity_fan', ''), timeout=args.timeout) if homeassistant_mode else (None, {})
-    ha_disk_temp, _ = get_home_assistant_state(getattr(args, 'ha_entity_disk_temp', ''), timeout=args.timeout) if homeassistant_mode else (None, {})
-    ha_uptime, _ = get_home_assistant_state(getattr(args, 'ha_entity_uptime', ''), timeout=args.timeout) if homeassistant_mode else (None, {})
+    def _ha_get(key):
+        eid = getattr(args, key, "")
+        if homeassistant_mode and eid and eid.strip():
+            return get_home_assistant_state(eid, timeout=args.timeout)
+        return None, {}
+
+    def _ha_get_conv(key, target_kb):
+        eid = getattr(args, key, "")
+        if homeassistant_mode and eid and eid.strip():
+            return get_home_assistant_metric_converted(eid, timeout=args.timeout, target_kb=target_kb)
+        return None
+
+    ha_cpu, _ = _ha_get('ha_entity_cpu')
+    ha_mem, _ = _ha_get('ha_entity_mem')
+    ha_temp, _ = _ha_get('ha_entity_temp')
+    ha_disk_pct, _ = _ha_get('ha_entity_disk_pct')
+    ha_fan, _ = _ha_get('ha_entity_fan')
+    ha_disk_temp, _ = _ha_get('ha_entity_disk_temp')
+    ha_uptime, _ = _ha_get('ha_entity_uptime')
 
     # Throughput metrics need unit conversion
-    ha_net_rx_kbps = get_home_assistant_metric_converted(getattr(args, 'ha_entity_net_rx', ''), timeout=args.timeout, target_kb=True) if homeassistant_mode else None
-    ha_net_tx_kbps = get_home_assistant_metric_converted(getattr(args, 'ha_entity_net_tx', ''), timeout=args.timeout, target_kb=True) if homeassistant_mode else None
-    ha_disk_read_kbs = get_home_assistant_metric_converted(getattr(args, 'ha_entity_disk_read', ''), timeout=args.timeout, target_kb=False) if homeassistant_mode else None
-    ha_disk_write_kbs = get_home_assistant_metric_converted(getattr(args, 'ha_entity_disk_write', ''), timeout=args.timeout, target_kb=False) if homeassistant_mode else None
+    ha_net_rx_kbps = _ha_get_conv('ha_entity_net_rx', target_kb=True)
+    ha_net_tx_kbps = _ha_get_conv('ha_entity_net_tx', target_kb=True)
+    ha_disk_read_kbs = _ha_get_conv('ha_entity_disk_read', target_kb=False)
+    ha_disk_write_kbs = _ha_get_conv('ha_entity_disk_write', target_kb=False)
 
     # CPU
     cpu_available = True

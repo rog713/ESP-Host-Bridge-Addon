@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026.03.21.24
+- Eliminated unnecessary `404: Not Found` errors by only querying Home Assistant for sensors that are explicitly configured.
+
 ## 2026.03.21.23
 - Fixed `0 / 0` network throughput display by correctly detecting and converting Home Assistant sensor units (e.g., `MB/s`, `MiB/s`, `kB/s`).
 - Improved unit awareness for all Home Assistant proxy metrics.
