@@ -159,6 +159,25 @@ def _read_first_line(path: str) -> str:
 
 
 def resolve_host_name() -> str:
+    # If we are in HA mode and have a token, try to get the actual host name via API
+    # instead of the container ID.
+    if is_home_assistant_app_mode() and SUPERVISOR_TOKEN:
+        try:
+            # We must use a direct request here because the regular proxy functions might not be defined yet
+            # or could cause circular dependencies if moved.
+            url = SUPERVISOR_HTTP_URL + "/host/info"
+            req = urllib.request.Request(url, method="GET")
+            req.add_header("Authorization", f"Bearer {SUPERVISOR_TOKEN}")
+            req.add_header("Content-Type", "application/json")
+            with urllib.request.urlopen(req, timeout=2.0) as resp:
+                data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                # API returns {"result": "ok", "data": {"hostname": "...", ...}}
+                hn = data.get("data", {}).get("hostname")
+                if hn:
+                    return str(hn).strip()
+        except Exception:
+            pass
+
     for candidate in (socket.gethostname(), platform.node(), os.environ.get("HOSTNAME", "")):
         name = str(candidate or "").strip()
         if name:
@@ -184,8 +203,6 @@ def resolve_supervisor_token() -> str:
     return ""
 
 
-HOST_NAME = resolve_host_name()
-HOST_NAME_USB = compact_host_name(HOST_NAME)
 SUPERVISOR_TOKEN = resolve_supervisor_token()
 SUPERVISOR_HTTP_URL = str(os.environ.get("ESP_HOST_BRIDGE_SUPERVISOR_HTTP", "http://supervisor") or "http://supervisor").rstrip("/")
 SUPERVISOR_WS_URL = str(os.environ.get("ESP_HOST_BRIDGE_SUPERVISOR_WS", "ws://supervisor/core/websocket") or "ws://supervisor/core/websocket").rstrip("/")
@@ -197,6 +214,10 @@ def is_home_assistant_app_mode() -> bool:
     if HOME_ASSISTANT_PLATFORM_MODE == "homeassistant":
         return True
     return bool(SUPERVISOR_TOKEN)
+
+
+HOST_NAME = resolve_host_name()
+HOST_NAME_USB = compact_host_name(HOST_NAME)
 
 
 def _humanize_home_assistant_slug(value: Any) -> str:

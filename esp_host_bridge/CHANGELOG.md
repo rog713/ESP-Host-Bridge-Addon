@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026.03.21.26
+- The bridge now fetches the actual system hostname via the Home Assistant API when running in HA mode (replaces the container ID).
+
 ## 2026.03.21.25
 - Removed Home Assistant entity configurations from the Add-on Configuration tab (manage them in the Web UI instead).
 - Reverted Serial Port to an optional text field to ensure it is always visible and allows for hardware-free testing.
