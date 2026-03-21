@@ -1,8 +1,13 @@
 # Changelog
 
+## 2026.03.21.14
+- Successfully implemented advanced UI selectors for Serial Port (device dropdown) and Home Assistant entities (sensor picker).
+- Switched Baud Rate to a dropdown list for better usability.
+- Added minimum Home Assistant version requirement (2024.1.0).
+
 ## 2026.03.21.13
 - Reverted advanced UI selectors (device/entity) to restore add-on visibility in Home Assistant. Standard text fields are used for now to ensure compatibility.
-
+...
 ## 2026.03.21.12
 - Added native Home Assistant serial device selector to the Add-on Configuration tab for easier port selection.
 ...

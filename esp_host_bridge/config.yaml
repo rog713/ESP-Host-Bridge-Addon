@@ -1,8 +1,9 @@
 name: "ESP Host Bridge"
-version: "2026.03.21.13"
+version: "2026.03.21.14"
 slug: "esp_host_bridge"
 description: "USB CDC bridge and host telemetry web UI for ESP display devices."
 url: "https://github.com/rog713/ESP-Host-Bridge"
+homeassistant: "2024.1.0"
 startup: services
 boot: auto
 init: false
@@ -27,15 +28,15 @@ apparmor: true
 webui: "http://[HOST]:[PORT:8654]"
 watchdog: "http://[HOST]:[PORT:8654]/api/status"
 options:
-  serial_port: ""
+  serial_port: null
   baud: 115200
   interval: 1.0
   timeout: 2.0
-  iface: ""
-  disk_device: ""
-  disk_temp_device: ""
-  cpu_temp_sensor: ""
-  fan_sensor: ""
+  iface: null
+  disk_device: null
+  disk_temp_device: null
+  cpu_temp_sensor: null
+  fan_sensor: null
   power_control_enabled: false
   addons_polling_enabled: true
   addons_interval: 2.0
@@ -49,17 +50,17 @@ options:
   ha_entity_cpu: "sensor.processor_use"
   ha_entity_mem: "sensor.memory_use_percent"
   ha_entity_temp: "sensor.processor_temperature"
-  ha_entity_disk_pct: ""
-  ha_entity_net_rx: ""
-  ha_entity_net_tx: ""
-  ha_entity_fan: ""
-  ha_entity_disk_temp: ""
+  ha_entity_disk_pct: null
+  ha_entity_net_rx: null
+  ha_entity_net_tx: null
+  ha_entity_fan: null
+  ha_entity_disk_temp: null
   ha_entity_uptime: "sensor.last_boot"
-  ha_entity_disk_read: ""
-  ha_entity_disk_write: ""
+  ha_entity_disk_read: null
+  ha_entity_disk_write: null
 schema:
-  serial_port: "str?"
-  baud: "int(1200,4000000)"
+  serial_port: "device(subsystem=tty)?"
+  baud: "list(1200|2400|4800|9600|19200|38400|57600|115200|230400|460800|921600|1000000|2000000|4000000)"
   interval: "float(0.1,)"
   timeout: "float(0.1,)"
   iface: "str?"
@@ -77,14 +78,14 @@ schema:
   activity_limit: "int(1,25)"
   activity_lookback_minutes: "int(5,1440)"
   gpu_polling_enabled: "bool"
-  ha_entity_cpu: "str?"
-  ha_entity_mem: "str?"
-  ha_entity_temp: "str?"
-  ha_entity_disk_pct: "str?"
-  ha_entity_net_rx: "str?"
-  ha_entity_net_tx: "str?"
-  ha_entity_fan: "str?"
-  ha_entity_disk_temp: "str?"
-  ha_entity_uptime: "str?"
-  ha_entity_disk_read: "str?"
-  ha_entity_disk_write: "str?"
+  ha_entity_cpu: "entity(domain=sensor)?"
+  ha_entity_mem: "entity(domain=sensor)?"
+  ha_entity_temp: "entity(domain=sensor)?"
+  ha_entity_disk_pct: "entity(domain=sensor)?"
+  ha_entity_net_rx: "entity(domain=sensor)?"
+  ha_entity_net_tx: "entity(domain=sensor)?"
+  ha_entity_fan: "entity(domain=sensor)?"
+  ha_entity_disk_temp: "entity(domain=sensor)?"
+  ha_entity_uptime: "entity(domain=sensor)?"
+  ha_entity_disk_read: "entity(domain=sensor)?"
+  ha_entity_disk_write: "entity(domain=sensor)?"
