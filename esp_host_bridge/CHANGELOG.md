@@ -1,8 +1,13 @@
 # Changelog
 
+## 2026.03.21.05
+- Fixed Home Assistant Proxy entities not persisting after Save + Restart.
+- Added "Discover Entities" button to auto-detect System Monitor sensors (including German localized names).
+- Improved Home Assistant API integration.
+
 ## 2026.03.21.04
 - Fixed Active Interface and Disk incorrectly showing local devices when Home Assistant Proxy is active.
-
+...
 ## 2026.03.21.03
 - Fixed `NameError: name 'st' is not defined` that caused the Web UI to crash.
 

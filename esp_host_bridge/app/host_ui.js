@@ -2044,3 +2044,38 @@ updateMonitorDashboard({ last_metrics: {}, metric_history: {} });
 pollStatus();
 pollLogs();
 pollCommLogs();
+
+async function discoverHaProxyEntities() {
+  const btn = document.getElementById('discoverHaProxyBtn');
+  const res = document.getElementById('discoverHaProxyResult');
+  if (!btn || !res) return;
+  btn.disabled = true;
+  res.textContent = 'Discovering entities...';
+  try {
+    const response = await fetch(getApiUrl('/api/discover-ha-proxy'));
+    const data = await response.json();
+    const keys = Object.keys(data);
+    if (keys.length === 0) {
+      res.textContent = 'No System Monitor entities found. Make sure the integration is loaded in HA.';
+    } else {
+      let count = 0;
+      for (const [key, eid] of Object.entries(data)) {
+        const input = document.getElementsByName(key)[0];
+        if (input) {
+          input.value = eid;
+          count++;
+        }
+      }
+      res.textContent = `Successfully discovered ${count} entities. Click Save + Restart to apply.`;
+    }
+  } catch (err) {
+    res.textContent = `Error discovering entities: ${err}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+const discoverHaProxyBtn = document.getElementById('discoverHaProxyBtn');
+if (discoverHaProxyBtn) {
+  discoverHaProxyBtn.addEventListener('click', discoverHaProxyEntities);
+}

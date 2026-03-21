@@ -404,6 +404,67 @@ def get_home_assistant_state(entity_id: str, timeout: float = 2.0) -> Optional[s
     return None
 
 
+def get_home_assistant_all_states(timeout: float = 5.0) -> list[dict[str, Any]]:
+    """Fetch all states from the Home Assistant Core API via the Supervisor proxy."""
+    if not SUPERVISOR_TOKEN:
+        return []
+    try:
+        res = _supervisor_request_json("/core/api/states", timeout=timeout)
+        if isinstance(res, list):
+            return res
+    except Exception:
+        pass
+    return []
+
+
+def discover_ha_proxy_entities(timeout: float = 5.0) -> Dict[str, str]:
+    """Search all HA entities for likely candidates for System Monitor metrics."""
+    states = get_home_assistant_all_states(timeout=timeout)
+    found = {}
+
+    def _match(eid: str, matches: list[str]) -> bool:
+        return any(m in eid.lower() for m in matches)
+
+    for item in states:
+        eid = item.get("entity_id", "")
+        if not eid.startswith("sensor."):
+            continue
+        attrs = item.get("attributes", {})
+        uom = attrs.get("unit_of_measurement", "")
+        dev_class = attrs.get("device_class", "")
+
+        # CPU Usage
+        if not found.get("ha_entity_cpu") and uom == "%" and _match(eid, ["processor_use", "cpu_usage", "cpu_util", "cpu_percent"]):
+            found["ha_entity_cpu"] = eid
+        # Memory Usage
+        if not found.get("ha_entity_mem") and uom == "%" and _match(eid, ["memory_use_percent", "ram_usage", "memory_usage"]):
+            found["ha_entity_mem"] = eid
+        # Temperature
+        if not found.get("ha_entity_temp") and uom in ["°C", "°F"] and _match(eid, ["processor_temperature", "cpu_temp", "thermal"]):
+            if "disk" not in eid.lower() and "gpu" not in eid.lower():
+                 found["ha_entity_temp"] = eid
+        # Disk Usage
+        if not found.get("ha_entity_disk_pct") and uom == "%" and _match(eid, ["disk_usage", "disk_use", "storage_usage"]):
+             found["ha_entity_disk_pct"] = eid
+        # Network RX
+        if not found.get("ha_entity_net_rx") and (uom in ["B/s", "kB/s", "MB/s", "GiB/s", "KiB/s", "MiB/s"] or dev_class == "data_rate") and _match(eid, ["network_throughput_in", "network_in", "rx_speed", "eingehender_netzwerkdurchsatz"]):
+             found["ha_entity_net_rx"] = eid
+        # Network TX
+        if not found.get("ha_entity_net_tx") and (uom in ["B/s", "kB/s", "MB/s", "GiB/s", "KiB/s", "MiB/s"] or dev_class == "data_rate") and _match(eid, ["network_throughput_out", "network_out", "tx_speed", "ausgehender_netzwerkdurchsatz"]):
+             found["ha_entity_net_tx"] = eid
+        # Uptime
+        if not found.get("ha_entity_uptime") and (dev_class in ["timestamp", "duration"] or _match(eid, ["last_boot", "uptime"])):
+             found["ha_entity_uptime"] = eid
+        # Disk Read
+        if not found.get("ha_entity_disk_read") and (uom in ["B/s", "kB/s", "MB/s"] or dev_class == "data_rate") and _match(eid, ["disk_read_speed", "disk_read"]):
+             found["ha_entity_disk_read"] = eid
+        # Disk Write
+        if not found.get("ha_entity_disk_write") and (uom in ["B/s", "kB/s", "MB/s"] or dev_class == "data_rate") and _match(eid, ["disk_write_speed", "disk_write"]):
+             found["ha_entity_disk_write"] = eid
+
+    return found
+
+
 def get_home_assistant_addons(timeout: float) -> list[dict[str, Any]]:
     payload = _supervisor_request_json("/addons", timeout=timeout)
     rows = payload.get("addons") if isinstance(payload, dict) else payload
@@ -2482,6 +2543,20 @@ def normalize_cfg(raw: Dict[str, Any]) -> Dict[str, Any]:
         raw.get("power_control_enabled", raw.get("allow_host_cmds", cfg["power_control_enabled"])),
         cfg["power_control_enabled"],
     )
+    for ha_key in [
+        "ha_entity_cpu",
+        "ha_entity_mem",
+        "ha_entity_temp",
+        "ha_entity_disk_pct",
+        "ha_entity_net_rx",
+        "ha_entity_net_tx",
+        "ha_entity_fan",
+        "ha_entity_disk_temp",
+        "ha_entity_uptime",
+        "ha_entity_disk_read",
+        "ha_entity_disk_write",
+    ]:
+        cfg[ha_key] = _clean_str(raw.get(ha_key, cfg[ha_key]), cfg[ha_key])
     return cfg
 
 
@@ -3236,6 +3311,7 @@ def create_app(
             ha_proxy_section = f"""
       <details class=\"section\" data-section-key=\"ha_proxy\"><summary><span class=\"section-icon\" aria-hidden=\"true\"><span class=\"mdi mdi-shield-check-outline\"></span></span>Home Assistant Proxy (Green Mode)</summary><div class=\"section-body\">
       <div class=\"hint\">Use these to pull metrics from Home Assistant's <b>System Monitor</b> integration instead of direct host access. This is required for VMs and high security ratings.</div>
+      <div class=\"row\"><label>Auto-Discovery</label><div><button id=\"discoverHaProxyBtn\" class=\"secondary\" type=\"button\">Discover Entities</button><div id=\"discoverHaProxyResult\" class=\"hint\" style=\"margin-top:6px;\">Scans your Home Assistant instance for System Monitor sensors.</div></div></div>
       <div class=\"field\">
         <label for=\"ha_entity_cpu\">CPU Usage Entity</label>
         <input type=\"text\" name=\"ha_entity_cpu\" id=\"ha_entity_cpu\" value=\"{html.escape(str(cfg.get('ha_entity_cpu', '')))}\" placeholder=\"sensor.processor_use\">
@@ -3942,6 +4018,12 @@ window.__HOST_METRICS_BOOT__ = {{
     @app.get("/api/status")
     def api_status() -> Any:
         return jsonify(pub.status(load_cfg(cfg_path)))
+
+    @app.get("/api/discover-ha-proxy")
+    def api_discover_ha_proxy() -> Any:
+        cfg = load_cfg(cfg_path)
+        timeout = _clean_float(cfg.get("timeout"), 2.0)
+        return jsonify(discover_ha_proxy_entities(timeout=timeout))
 
     @app.get("/api/config")
     def api_config() -> Any:
