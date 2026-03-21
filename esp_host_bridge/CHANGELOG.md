@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026.03.21.47
+- Merged the Add-on specific `README.md` into the root repository `README.md` for better visibility of features, requirements, and configuration instructions directly on the GitHub repository page.
+
 ## 2026.03.21.46
 - Removed default pre-filled value for CPU Temperature entity, as it is optional and can cause confusion on systems without one.
 - Added link to the Home Assistant System Monitor integration in the documentation, as it is highly recommended for basic telemetry.
