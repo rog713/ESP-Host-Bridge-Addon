@@ -2014,18 +2014,24 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     # CPU
     if ha_cpu is not None:
         cpu_pct = safe_float(ha_cpu, 0.0)
+    elif homeassistant_mode:
+        cpu_pct = 0.0
     else:
         cpu_pct, state.cpu_prev_total, state.cpu_prev_idle = get_cpu_percent(state.cpu_prev_total, state.cpu_prev_idle)
 
     # MEM
     if ha_mem is not None:
         mem_pct = safe_float(ha_mem, 0.0)
+    elif homeassistant_mode:
+        mem_pct = 0.0
     else:
         mem_pct = get_mem_percent()
 
     # TEMP
     if ha_temp is not None:
         cpu_temp_sample = safe_float(ha_temp, None)
+    elif homeassistant_mode:
+        cpu_temp_sample = None
     else:
         cpu_temp_sample = get_cpu_temp_c(getattr(args, 'cpu_temp_sensor', None))
 
@@ -2041,11 +2047,16 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
                 uptime_s = safe_float(ha_uptime, uptime_s)
         except Exception:
             uptime_s = safe_float(ha_uptime, uptime_s)
+    elif homeassistant_mode:
+        uptime_s = 0.0
+
     cpu_temp_available = cpu_temp_sample is not None
     cpu_temp = float(cpu_temp_sample or 0.0)
     if (now - state.last_disk_temp_ts) >= DISK_TEMP_REFRESH_SECONDS:
         if ha_disk_temp is not None:
             disk_temp_sample = safe_float(ha_disk_temp, None)
+        elif homeassistant_mode:
+            disk_temp_sample = None
         else:
             disk_temp_sample = get_disk_temp_c(args.timeout, args.disk_temp_device or args.disk_device)
         state.disk_temp_c = float(disk_temp_sample or 0.0)
@@ -2055,6 +2066,8 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     if (now - state.last_disk_usage_ts) >= DISK_USAGE_REFRESH_SECONDS:
         if ha_disk_pct is not None:
             state.disk_usage_pct = safe_float(ha_disk_pct, 0.0)
+        elif homeassistant_mode:
+            state.disk_usage_pct = 0.0
         else:
             state.disk_usage_pct = get_disk_usage_pct(args.disk_device, state.active_disk)
         state.last_disk_usage_ts = now
@@ -2062,11 +2075,13 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     if (now - state.last_slow_sensor_ts) >= SLOW_SENSOR_REFRESH_SECONDS:
         if ha_fan is not None:
             fan_rpm_sample = safe_float(ha_fan, 0.0)
+        elif homeassistant_mode:
+            fan_rpm_sample = None
         else:
             fan_rpm_sample = get_fan_rpm(getattr(args, 'fan_sensor', None))
         state.fan_rpm = float(fan_rpm_sample or 0.0)
         state.fan_available = fan_rpm_sample is not None
-        if gpu_enabled:
+        if gpu_enabled and not homeassistant_mode:
             gpu = get_gpu_metrics(args.timeout)
             state.gpu_temp_c = float(gpu.get('temp_c', 0.0) or 0.0)
             state.gpu_util_pct = float(gpu.get('util_pct', 0.0) or 0.0)
@@ -2177,16 +2192,22 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
         activity_rows = []
         state.ha_activity_api_ok = None
 
-    rx_bytes, tx_bytes, state.active_iface = get_net_bytes_local(args.iface, state.active_iface)
+    if homeassistant_mode:
+        rx_bytes, tx_bytes = 0, 0
+        state.active_iface = "HA Proxy"
+    else:
+        rx_bytes, tx_bytes, state.active_iface = get_net_bytes_local(args.iface, state.active_iface)
+
     rx_kbps = 0.0
     tx_kbps = 0.0
     dt = 0.0
     if state.prev_t is not None and now > state.prev_t:
         dt = now - state.prev_t
-        if state.prev_rx is not None and rx_bytes >= state.prev_rx:
-            rx_kbps = ((rx_bytes - state.prev_rx) * 8.0) / 1000.0 / dt
-        if state.prev_tx is not None and tx_bytes >= state.prev_tx:
-            tx_kbps = ((tx_bytes - state.prev_tx) * 8.0) / 1000.0 / dt
+        if not homeassistant_mode:
+            if state.prev_rx is not None and rx_bytes >= state.prev_rx:
+                rx_kbps = ((rx_bytes - state.prev_rx) * 8.0) / 1000.0 / dt
+            if state.prev_tx is not None and tx_bytes >= state.prev_tx:
+                tx_kbps = ((tx_bytes - state.prev_tx) * 8.0) / 1000.0 / dt
 
     # Overwrite with HA Proxy if enabled.
     # HA System Monitor throughput is in bytes/second.
@@ -2199,10 +2220,15 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
         tx_kbps = (safe_float(ha_net_tx, 0.0) * 8.0) / 1000.0
         state.active_iface = "HA Proxy"
 
-    disk_read_b, disk_write_b, state.active_disk = get_disk_bytes_local(args.disk_device, state.active_disk)
+    if homeassistant_mode:
+        disk_read_b, disk_write_b = 0, 0
+        state.active_disk = "HA Proxy"
+    else:
+        disk_read_b, disk_write_b, state.active_disk = get_disk_bytes_local(args.disk_device, state.active_disk)
+
     disk_r_kbs = 0.0
     disk_w_kbs = 0.0
-    if dt > 0.0:
+    if dt > 0.0 and not homeassistant_mode:
         if state.prev_disk_read_b is not None and disk_read_b >= state.prev_disk_read_b:
             disk_r_kbs = (disk_read_b - state.prev_disk_read_b) / 1024.0 / dt
         if state.prev_disk_write_b is not None and disk_write_b >= state.prev_disk_write_b:
