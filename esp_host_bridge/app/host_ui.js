@@ -306,7 +306,8 @@ function updateTelemetryHealth(s) {
   }
   if (age <= 3) {
     el.classList.add('ok');
-    el.textContent = `Telemetry: Live (${Math.round(age)}s)`;
+    const ageLabel = age < 2 ? 'Live' : `Live (${Math.round(age)}s)`;
+    el.textContent = `Telemetry: ${ageLabel}`;
     return;
   }
   if (age <= 10) {

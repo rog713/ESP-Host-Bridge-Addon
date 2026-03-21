@@ -50,6 +50,25 @@ Why:
 
 The add-on reads the ESP over `/dev` on the Home Assistant host. The exact device path depends on your system.
 
+### Home Assistant Proxy (HA Mode)
+
+When the add-on detects it is running inside Home Assistant, it uses **HA Proxy mode** (also known as Green Mode).
+
+- **Metrics**: Relies exclusively on Home Assistant entities (specifically the **System Monitor** integration).
+- **Security**: This mode is safer because the add-on does not need direct host hardware access (like `libsensors` or direct `/dev/` block device reads) to pull telemetry.
+- **Auto-Discovery**: Click the "Discover Entities" button in the Web UI (Setup tab) to automatically map your System Monitor sensors.
+
+### Host Mode (Standalone)
+
+When running outside of Home Assistant (standalone Docker or script), the agent pulls metrics directly from the host operating system using `psutil`, `/proc`, and other local hardware sensors.
+
+### Configuration
+
+Configuration is primarily managed via the **Web UI** (Ingress). Use the **Setup** tab inside the Web UI to:
+- Configure your **Serial Port** and **Baud Rate**.
+- Map Home Assistant **Sensor Entities**.
+- Manage **Add-on** and **Integration** polling intervals.
+
 ### Add-ons
 
 Add-on data comes from the Supervisor API. No host Docker socket is used.
