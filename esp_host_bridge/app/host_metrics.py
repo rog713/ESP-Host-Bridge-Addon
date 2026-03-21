@@ -1946,6 +1946,9 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     ha_net_tx = get_home_assistant_state(getattr(args, 'ha_entity_net_tx', ''), timeout=args.timeout) if homeassistant_mode else None
     ha_fan = get_home_assistant_state(getattr(args, 'ha_entity_fan', ''), timeout=args.timeout) if homeassistant_mode else None
     ha_disk_temp = get_home_assistant_state(getattr(args, 'ha_entity_disk_temp', ''), timeout=args.timeout) if homeassistant_mode else None
+    ha_uptime = get_home_assistant_state(getattr(args, 'ha_entity_uptime', ''), timeout=args.timeout) if homeassistant_mode else None
+    ha_disk_read = get_home_assistant_state(getattr(args, 'ha_entity_disk_read', ''), timeout=args.timeout) if homeassistant_mode else None
+    ha_disk_write = get_home_assistant_state(getattr(args, 'ha_entity_disk_write', ''), timeout=args.timeout) if homeassistant_mode else None
 
     # CPU
     if ha_cpu is not None:
@@ -1966,6 +1969,17 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
         cpu_temp_sample = get_cpu_temp_c(getattr(args, 'cpu_temp_sensor', None))
 
     uptime_s = get_uptime_seconds()
+    if ha_uptime is not None:
+        # Check if it's an ISO timestamp (sensor.last_boot)
+        try:
+            from datetime import datetime
+            if "T" in ha_uptime:
+                boot_dt = datetime.fromisoformat(ha_uptime.replace("Z", "+00:00"))
+                uptime_s = max(0.0, time.time() - boot_dt.timestamp())
+            else:
+                uptime_s = safe_float(ha_uptime, uptime_s)
+        except Exception:
+            uptime_s = safe_float(ha_uptime, uptime_s)
     cpu_temp_available = cpu_temp_sample is not None
     cpu_temp = float(cpu_temp_sample or 0.0)
     if (now - state.last_disk_temp_ts) >= DISK_TEMP_REFRESH_SECONDS:
@@ -2130,6 +2144,14 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
             disk_r_kbs = (disk_read_b - state.prev_disk_read_b) / 1024.0 / dt
         if state.prev_disk_write_b is not None and disk_write_b >= state.prev_disk_write_b:
             disk_w_kbs = (disk_write_b - state.prev_disk_write_b) / 1024.0 / dt
+
+    # Overwrite with HA Proxy if enabled.
+    # HA System Monitor throughput for disks is typically B/s.
+    # Bridge expects kB/s.
+    if ha_disk_read is not None:
+        disk_r_kbs = safe_float(ha_disk_read, 0.0) / 1024.0
+    if ha_disk_write is not None:
+        disk_w_kbs = safe_float(ha_disk_write, 0.0) / 1024.0
     state.prev_disk_read_b, state.prev_disk_write_b = disk_read_b, disk_write_b
     state.prev_rx, state.prev_tx, state.prev_t = rx_bytes, tx_bytes, now
 
@@ -2361,6 +2383,9 @@ def webui_default_cfg() -> Dict[str, Any]:
         "ha_entity_net_tx": "",
         "ha_entity_fan": "",
         "ha_entity_disk_temp": "",
+        "ha_entity_uptime": "sensor.last_boot",
+        "ha_entity_disk_read": "",
+        "ha_entity_disk_write": "",
     }
 
 
@@ -3029,6 +3054,9 @@ def cfg_from_form(form: Any) -> Dict[str, Any]:
             "ha_entity_net_tx": form.get("ha_entity_net_tx"),
             "ha_entity_fan": form.get("ha_entity_fan"),
             "ha_entity_disk_temp": form.get("ha_entity_disk_temp"),
+            "ha_entity_uptime": form.get("ha_entity_uptime"),
+            "ha_entity_disk_read": form.get("ha_entity_disk_read"),
+            "ha_entity_disk_write": form.get("ha_entity_disk_write"),
         }
     )
 
@@ -3238,6 +3266,21 @@ def create_app(
         <label for=\"ha_entity_disk_temp\">Disk Temperature Entity</label>
         <input type=\"text\" name=\"ha_entity_disk_temp\" id=\"ha_entity_disk_temp\" value=\"{html.escape(str(cfg.get('ha_entity_disk_temp', '')))}\" placeholder=\"sensor.disk_temperature_sda\">
         <div class=\"hint\">Optional. Entity ID for disk temperature (e.g. <code>sensor.disk_temperature_sda</code>)</div>
+      </div>
+      <div class=\"field\">
+        <label for=\"ha_entity_uptime\">Uptime (or Last Boot) Entity</label>
+        <input type=\"text\" name=\"ha_entity_uptime\" id=\"ha_entity_uptime\" value=\"{html.escape(str(cfg.get('ha_entity_uptime', '')))}\" placeholder=\"sensor.last_boot\">
+        <div class=\"hint\">Optional. Entity ID for uptime (e.g. <code>sensor.last_boot</code>)</div>
+      </div>
+      <div class=\"field\">
+        <label for=\"ha_entity_disk_read\">Disk Read speed Entity (B/s)</label>
+        <input type=\"text\" name=\"ha_entity_disk_read\" id=\"ha_entity_disk_read\" value=\"{html.escape(str(cfg.get('ha_entity_disk_read', '')))}\" placeholder=\"sensor.disk_read_speed_sda\">
+        <div class=\"hint\">Optional. Entity ID for disk read throughput (e.g. <code>sensor.disk_read_speed_sda</code>)</div>
+      </div>
+      <div class=\"field\">
+        <label for=\"ha_entity_disk_write\">Disk Write speed Entity (B/s)</label>
+        <input type=\"text\" name=\"ha_entity_disk_write\" id=\"ha_entity_disk_write\" value=\"{html.escape(str(cfg.get('ha_entity_disk_write', '')))}\" placeholder=\"sensor.disk_write_speed_sda\">
+        <div class=\"hint\">Optional. Entity ID for disk write throughput (e.g. <code>sensor.disk_write_speed_sda</code>)</div>
       </div>
       </div></details>
       """
