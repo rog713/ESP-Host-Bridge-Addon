@@ -1941,6 +1941,11 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     ha_cpu = get_home_assistant_state(getattr(args, 'ha_entity_cpu', ''), timeout=args.timeout) if homeassistant_mode else None
     ha_mem = get_home_assistant_state(getattr(args, 'ha_entity_mem', ''), timeout=args.timeout) if homeassistant_mode else None
     ha_temp = get_home_assistant_state(getattr(args, 'ha_entity_temp', ''), timeout=args.timeout) if homeassistant_mode else None
+    ha_disk_pct = get_home_assistant_state(getattr(args, 'ha_entity_disk_pct', ''), timeout=args.timeout) if homeassistant_mode else None
+    ha_net_rx = get_home_assistant_state(getattr(args, 'ha_entity_net_rx', ''), timeout=args.timeout) if homeassistant_mode else None
+    ha_net_tx = get_home_assistant_state(getattr(args, 'ha_entity_net_tx', ''), timeout=args.timeout) if homeassistant_mode else None
+    ha_fan = get_home_assistant_state(getattr(args, 'ha_entity_fan', ''), timeout=args.timeout) if homeassistant_mode else None
+    ha_disk_temp = get_home_assistant_state(getattr(args, 'ha_entity_disk_temp', ''), timeout=args.timeout) if homeassistant_mode else None
 
     # CPU
     if ha_cpu is not None:
@@ -1964,17 +1969,26 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     cpu_temp_available = cpu_temp_sample is not None
     cpu_temp = float(cpu_temp_sample or 0.0)
     if (now - state.last_disk_temp_ts) >= DISK_TEMP_REFRESH_SECONDS:
-        disk_temp_sample = get_disk_temp_c(args.timeout, args.disk_temp_device or args.disk_device)
+        if ha_disk_temp is not None:
+            disk_temp_sample = safe_float(ha_disk_temp, None)
+        else:
+            disk_temp_sample = get_disk_temp_c(args.timeout, args.disk_temp_device or args.disk_device)
         state.disk_temp_c = float(disk_temp_sample or 0.0)
         state.disk_temp_available = disk_temp_sample is not None
         state.last_disk_temp_ts = now
     disk_temp_available = bool(getattr(state, "disk_temp_available", False))
     if (now - state.last_disk_usage_ts) >= DISK_USAGE_REFRESH_SECONDS:
-        state.disk_usage_pct = get_disk_usage_pct(args.disk_device, state.active_disk)
+        if ha_disk_pct is not None:
+            state.disk_usage_pct = safe_float(ha_disk_pct, 0.0)
+        else:
+            state.disk_usage_pct = get_disk_usage_pct(args.disk_device, state.active_disk)
         state.last_disk_usage_ts = now
     gpu_enabled = not bool(getattr(args, "disable_gpu_polling", False))
     if (now - state.last_slow_sensor_ts) >= SLOW_SENSOR_REFRESH_SECONDS:
-        fan_rpm_sample = get_fan_rpm(getattr(args, 'fan_sensor', None))
+        if ha_fan is not None:
+            fan_rpm_sample = safe_float(ha_fan, 0.0)
+        else:
+            fan_rpm_sample = get_fan_rpm(getattr(args, 'fan_sensor', None))
         state.fan_rpm = float(fan_rpm_sample or 0.0)
         state.fan_available = fan_rpm_sample is not None
         if gpu_enabled:
@@ -2098,6 +2112,15 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
             rx_kbps = ((rx_bytes - state.prev_rx) * 8.0) / 1000.0 / dt
         if state.prev_tx is not None and tx_bytes >= state.prev_tx:
             tx_kbps = ((tx_bytes - state.prev_tx) * 8.0) / 1000.0 / dt
+
+    # Overwrite with HA Proxy if enabled.
+    # HA System Monitor throughput is in bytes/second.
+    # Bridge expects kbps (kilobits per second).
+    # kbps = (B/s * 8) / 1000
+    if ha_net_rx is not None:
+        rx_kbps = (safe_float(ha_net_rx, 0.0) * 8.0) / 1000.0
+    if ha_net_tx is not None:
+        tx_kbps = (safe_float(ha_net_tx, 0.0) * 8.0) / 1000.0
 
     disk_read_b, disk_write_b, state.active_disk = get_disk_bytes_local(args.disk_device, state.active_disk)
     disk_r_kbs = 0.0
@@ -2333,6 +2356,11 @@ def webui_default_cfg() -> Dict[str, Any]:
         "ha_entity_cpu": "sensor.processor_use",
         "ha_entity_mem": "sensor.memory_use_percent",
         "ha_entity_temp": "sensor.processor_temperature",
+        "ha_entity_disk_pct": "",
+        "ha_entity_net_rx": "",
+        "ha_entity_net_tx": "",
+        "ha_entity_fan": "",
+        "ha_entity_disk_temp": "",
     }
 
 
@@ -2996,6 +3024,11 @@ def cfg_from_form(form: Any) -> Dict[str, Any]:
             "ha_entity_cpu": form.get("ha_entity_cpu"),
             "ha_entity_mem": form.get("ha_entity_mem"),
             "ha_entity_temp": form.get("ha_entity_temp"),
+            "ha_entity_disk_pct": form.get("ha_entity_disk_pct"),
+            "ha_entity_net_rx": form.get("ha_entity_net_rx"),
+            "ha_entity_net_tx": form.get("ha_entity_net_tx"),
+            "ha_entity_fan": form.get("ha_entity_fan"),
+            "ha_entity_disk_temp": form.get("ha_entity_disk_temp"),
         }
     )
 
@@ -3185,6 +3218,26 @@ def create_app(
         <label for=\"ha_entity_temp\">CPU Temperature Entity</label>
         <input type=\"text\" name=\"ha_entity_temp\" id=\"ha_entity_temp\" value=\"{html.escape(str(cfg.get('ha_entity_temp', '')))}\" placeholder=\"sensor.processor_temperature\">
         <div class=\"hint\">Entity ID for CPU Temperature (e.g. <code>sensor.processor_temperature</code>)</div>
+      </div>
+      <div class=\"field\">
+        <label for=\"ha_entity_disk_pct\">Disk Usage (%) Entity</label>
+        <input type=\"text\" name=\"ha_entity_disk_pct\" id=\"ha_entity_disk_pct\" value=\"{html.escape(str(cfg.get('ha_entity_disk_pct', '')))}\" placeholder=\"sensor.disk_usage_percent_root\">
+        <div class=\"hint\">Entity ID for disk percentage (e.g. <code>sensor.disk_usage_percent_root</code>)</div>
+      </div>
+      <div class=\"field\">
+        <label for=\"ha_entity_net_rx\">Network RX Entity (Throughput In)</label>
+        <input type=\"text\" name=\"ha_entity_net_rx\" id=\"ha_entity_net_rx\" value=\"{html.escape(str(cfg.get('ha_entity_net_rx', '')))}\" placeholder=\"sensor.network_throughput_in_eth0\">
+        <div class=\"hint\">Entity ID for network download speed (e.g. <code>sensor.network_throughput_in_eth0</code>)</div>
+      </div>
+      <div class=\"field\">
+        <label for=\"ha_entity_net_tx\">Network TX Entity (Throughput Out)</label>
+        <input type=\"text\" name=\"ha_entity_net_tx\" id=\"ha_entity_net_tx\" value=\"{html.escape(str(cfg.get('ha_entity_net_tx', '')))}\" placeholder=\"sensor.network_throughput_out_eth0\">
+        <div class=\"hint\">Entity ID for network upload speed (e.g. <code>sensor.network_throughput_out_eth0</code>)</div>
+      </div>
+      <div class=\"field\">
+        <label for=\"ha_entity_disk_temp\">Disk Temperature Entity</label>
+        <input type=\"text\" name=\"ha_entity_disk_temp\" id=\"ha_entity_disk_temp\" value=\"{html.escape(str(cfg.get('ha_entity_disk_temp', '')))}\" placeholder=\"sensor.disk_temperature_sda\">
+        <div class=\"hint\">Optional. Entity ID for disk temperature (e.g. <code>sensor.disk_temperature_sda</code>)</div>
       </div>
       </div></details>
       """
