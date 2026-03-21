@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.21.23
+- Fixed `0 / 0` network throughput display by correctly detecting and converting Home Assistant sensor units (e.g., `MB/s`, `MiB/s`, `kB/s`).
+- Improved unit awareness for all Home Assistant proxy metrics.
+
 ## 2026.03.21.22
 - Optimized sensor discovery to prioritize entities starting with `sensor.system_monitor_` for more accurate auto-configuration.
 

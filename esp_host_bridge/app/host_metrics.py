@@ -397,20 +397,51 @@ def _supervisor_request_json(path: str, timeout: float, method: str = "GET", pay
     return decoded
 
 
-def get_home_assistant_state(entity_id: str, timeout: float = 2.0) -> Optional[str]:
-    """Fetch the 'state' string for a specific Home Assistant entity."""
+def get_home_assistant_state(entity_id: str, timeout: float = 2.0) -> Tuple[Optional[str], Dict[str, Any]]:
+    """Fetch the 'state' string and attributes for a specific Home Assistant entity."""
     if not SUPERVISOR_TOKEN or not entity_id:
-        return None
+        return None, {}
     try:
         # The Supervisor API provides a proxy to the HA Core API at /core/api/states/<entity_id>
         res = _supervisor_request_json(f"/core/api/states/{entity_id}", timeout=timeout)
         if isinstance(res, dict) and "state" in res:
             val = str(res["state"])
-            logging.info("HA State [%s] = %s", entity_id, val)
-            return val
+            attrs = res.get("attributes", {})
+            logging.info("HA State [%s] = %s (unit=%s)", entity_id, val, attrs.get("unit_of_measurement"))
+            return val, attrs
     except Exception as e:
         logging.warning("Failed to fetch HA state for %s: %s", entity_id, e)
-    return None
+    return None, {}
+
+
+def get_home_assistant_metric_converted(entity_id: str, timeout: float, target_kb: bool = False) -> Optional[float]:
+    """Fetch an HA state and convert it to a numeric value, handling units like MB/s -> kbps or kB/s."""
+    state, attrs = get_home_assistant_state(entity_id, timeout=timeout)
+    if state is None:
+        return None
+    val = safe_float(state, None)
+    if val is None:
+        return None
+    
+    uom = str(attrs.get("unit_of_measurement", "")).lower()
+    
+    # Target kbps (bits) for network, kB/s (bytes) for disk
+    if target_kb: # Convert to kbps (bits)
+        if "mib/s" in uom or "mb/s" in uom:
+            return val * 1024.0 * 8.0
+        if "kib/s" in uom or "kb/s" in uom:
+            return val * 8.0
+        if "b/s" in uom:
+            return (val * 8.0) / 1000.0
+    else: # Convert to kB/s (bytes)
+        if "mib/s" in uom or "mb/s" in uom:
+            return val * 1024.0
+        if "kib/s" in uom or "kb/s" in uom:
+            return val
+        if "b/s" in uom:
+            return val / 1024.0
+            
+    return val
 
 
 def get_home_assistant_all_states(timeout: float = 5.0) -> list[dict[str, Any]]:
@@ -2040,17 +2071,19 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
 
     # 1. Fetch metrics (Home Assistant Proxy Mode)
     # If HA entities are provided, we pull from them to allow "Green" security rating (no full_access needed)
-    ha_cpu = get_home_assistant_state(getattr(args, 'ha_entity_cpu', ''), timeout=args.timeout) if homeassistant_mode else None
-    ha_mem = get_home_assistant_state(getattr(args, 'ha_entity_mem', ''), timeout=args.timeout) if homeassistant_mode else None
-    ha_temp = get_home_assistant_state(getattr(args, 'ha_entity_temp', ''), timeout=args.timeout) if homeassistant_mode else None
-    ha_disk_pct = get_home_assistant_state(getattr(args, 'ha_entity_disk_pct', ''), timeout=args.timeout) if homeassistant_mode else None
-    ha_net_rx = get_home_assistant_state(getattr(args, 'ha_entity_net_rx', ''), timeout=args.timeout) if homeassistant_mode else None
-    ha_net_tx = get_home_assistant_state(getattr(args, 'ha_entity_net_tx', ''), timeout=args.timeout) if homeassistant_mode else None
-    ha_fan = get_home_assistant_state(getattr(args, 'ha_entity_fan', ''), timeout=args.timeout) if homeassistant_mode else None
-    ha_disk_temp = get_home_assistant_state(getattr(args, 'ha_entity_disk_temp', ''), timeout=args.timeout) if homeassistant_mode else None
-    ha_uptime = get_home_assistant_state(getattr(args, 'ha_entity_uptime', ''), timeout=args.timeout) if homeassistant_mode else None
-    ha_disk_read = get_home_assistant_state(getattr(args, 'ha_entity_disk_read', ''), timeout=args.timeout) if homeassistant_mode else None
-    ha_disk_write = get_home_assistant_state(getattr(args, 'ha_entity_disk_write', ''), timeout=args.timeout) if homeassistant_mode else None
+    ha_cpu, _ = get_home_assistant_state(getattr(args, 'ha_entity_cpu', ''), timeout=args.timeout) if homeassistant_mode else (None, {})
+    ha_mem, _ = get_home_assistant_state(getattr(args, 'ha_entity_mem', ''), timeout=args.timeout) if homeassistant_mode else (None, {})
+    ha_temp, _ = get_home_assistant_state(getattr(args, 'ha_entity_temp', ''), timeout=args.timeout) if homeassistant_mode else (None, {})
+    ha_disk_pct, _ = get_home_assistant_state(getattr(args, 'ha_entity_disk_pct', ''), timeout=args.timeout) if homeassistant_mode else (None, {})
+    ha_fan, _ = get_home_assistant_state(getattr(args, 'ha_entity_fan', ''), timeout=args.timeout) if homeassistant_mode else (None, {})
+    ha_disk_temp, _ = get_home_assistant_state(getattr(args, 'ha_entity_disk_temp', ''), timeout=args.timeout) if homeassistant_mode else (None, {})
+    ha_uptime, _ = get_home_assistant_state(getattr(args, 'ha_entity_uptime', ''), timeout=args.timeout) if homeassistant_mode else (None, {})
+
+    # Throughput metrics need unit conversion
+    ha_net_rx_kbps = get_home_assistant_metric_converted(getattr(args, 'ha_entity_net_rx', ''), timeout=args.timeout, target_kb=True) if homeassistant_mode else None
+    ha_net_tx_kbps = get_home_assistant_metric_converted(getattr(args, 'ha_entity_net_tx', ''), timeout=args.timeout, target_kb=True) if homeassistant_mode else None
+    ha_disk_read_kbs = get_home_assistant_metric_converted(getattr(args, 'ha_entity_disk_read', ''), timeout=args.timeout, target_kb=False) if homeassistant_mode else None
+    ha_disk_write_kbs = get_home_assistant_metric_converted(getattr(args, 'ha_entity_disk_write', ''), timeout=args.timeout, target_kb=False) if homeassistant_mode else None
 
     # CPU
     cpu_available = True
@@ -2261,13 +2294,13 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
                 tx_kbps = ((tx_bytes - state.prev_tx) * 8.0) / 1000.0 / dt
 
     net_available = True
-    if ha_net_rx is not None:
-        rx_kbps = (safe_float(ha_net_rx, 0.0) * 8.0) / 1000.0
+    if ha_net_rx_kbps is not None:
+        rx_kbps = ha_net_rx_kbps
         state.active_iface = "HA Proxy"
     elif homeassistant_mode:
         net_available = False
-    if ha_net_tx is not None:
-        tx_kbps = (safe_float(ha_net_tx, 0.0) * 8.0) / 1000.0
+    if ha_net_tx_kbps is not None:
+        tx_kbps = ha_net_tx_kbps
         state.active_iface = "HA Proxy"
         net_available = True
 
@@ -2289,14 +2322,12 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
         disk_io_available = False
 
     # Overwrite with HA Proxy if enabled.
-    # HA System Monitor throughput for disks is typically B/s.
-    # Bridge expects kB/s.
-    if ha_disk_read is not None:
-        disk_r_kbs = safe_float(ha_disk_read, 0.0) / 1024.0
+    if ha_disk_read_kbs is not None:
+        disk_r_kbs = ha_disk_read_kbs
         state.active_disk = "HA Proxy"
         disk_io_available = True
-    if ha_disk_write is not None:
-        disk_w_kbs = safe_float(ha_disk_write, 0.0) / 1024.0
+    if ha_disk_write_kbs is not None:
+        disk_w_kbs = ha_disk_write_kbs
         state.active_disk = "HA Proxy"
         disk_io_available = True
     state.prev_disk_read_b, state.prev_disk_write_b = disk_read_b, disk_write_b
