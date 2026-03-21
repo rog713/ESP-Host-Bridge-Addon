@@ -18,9 +18,10 @@ Poor fit:
 
 ## Permissions
 
-This add-on intentionally asks for broad host access:
+The add-on requires specific access to function, but no longer requires full host access:
 
-- `full_access: true`
+- `full_access: false`
+- `apparmor: true`
 - `host_network: true`
 - `host_uts: true`
 - `hassio_api: true`
@@ -28,13 +29,11 @@ This add-on intentionally asks for broad host access:
 - `hassio_role: manager`
 - `udev: true`
 - `uart: true`
-- `apparmor: false`
 
 Why:
 
-- serial access needs host device visibility
-- add-ons, integrations, activity, and host power use Supervisor/Core APIs
-- disk and SMART access need real block-device visibility when available
+- serial access needs host device visibility (`udev`, `uart`)
+- add-ons, integrations, activity, and host power use Supervisor/Core APIs (`hassio_api`, `homeassistant_api`)
 
 ## Install
 
