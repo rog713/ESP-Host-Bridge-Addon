@@ -1,5 +1,5 @@
 name: "ESP Host Bridge"
-version: "2026.03.21.32"
+version: "2026.03.21.33"
 slug: "esp_host_bridge"
 description: "USB CDC bridge and host telemetry web UI for ESP display devices."
 url: "https://github.com/rog713/ESP-Host-Bridge"
@@ -28,7 +28,6 @@ devices:
 webui: "http://[HOST]:[PORT:8654]"
 watchdog: "http://[HOST]:[PORT:8654]/api/status"
 options:
-  serial_port: null
   baud: "115200"
   interval: 1.0
   timeout: 2.0

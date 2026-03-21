@@ -2124,6 +2124,9 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
     ha_fan, _ = _ha_get('ha_entity_fan')
     ha_disk_temp, _ = _ha_get('ha_entity_disk_temp')
     ha_uptime, _ = _ha_get('ha_entity_uptime')
+    ha_gpu_util, _ = _ha_get('ha_entity_gpu_util')
+    ha_gpu_temp, _ = _ha_get('ha_entity_gpu_temp')
+    ha_gpu_vram, _ = _ha_get('ha_entity_gpu_vram')
 
     # Fallbacks from host/info
     ha_info = state.ha_host_info
@@ -2238,12 +2241,18 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
             fan_rpm_sample = get_fan_rpm(getattr(args, 'fan_sensor', None))
         state.fan_rpm = float(fan_rpm_sample or 0.0)
         state.fan_available = fan_rpm_sample is not None
-        if gpu_enabled and not homeassistant_mode:
-            gpu = get_gpu_metrics(args.timeout)
-            state.gpu_temp_c = float(gpu.get('temp_c', 0.0) or 0.0)
-            state.gpu_util_pct = float(gpu.get('util_pct', 0.0) or 0.0)
-            state.gpu_mem_pct = float(gpu.get('mem_pct', 0.0) or 0.0)
-            state.gpu_available = bool(gpu.get('available', False))
+        if gpu_enabled:
+            if homeassistant_mode:
+                state.gpu_util_pct = safe_float(ha_gpu_util, 0.0)
+                state.gpu_temp_c = safe_float(ha_gpu_temp, 0.0)
+                state.gpu_mem_pct = safe_float(ha_gpu_vram, 0.0)
+                state.gpu_available = any(x is not None for x in [ha_gpu_util, ha_gpu_temp, ha_gpu_vram])
+            else:
+                gpu = get_gpu_metrics(args.timeout)
+                state.gpu_temp_c = float(gpu.get('temp_c', 0.0) or 0.0)
+                state.gpu_util_pct = float(gpu.get('util_pct', 0.0) or 0.0)
+                state.gpu_mem_pct = float(gpu.get('mem_pct', 0.0) or 0.0)
+                state.gpu_available = bool(gpu.get('available', False))
         else:
             state.gpu_temp_c = 0.0
             state.gpu_util_pct = 0.0
@@ -2540,6 +2549,9 @@ def agent_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--ha-entity-uptime", default=None, help="HA Entity ID for Uptime")
     ap.add_argument("--ha-entity-disk-read", default=None, help="HA Entity ID for Disk read speed")
     ap.add_argument("--ha-entity-disk-write", default=None, help="HA Entity ID for Disk write speed")
+    ap.add_argument("--ha-entity-gpu-util", default=None, help="HA Entity ID for GPU utilization")
+    ap.add_argument("--ha-entity-gpu-temp", default=None, help="HA Entity ID for GPU temperature")
+    ap.add_argument("--ha-entity-gpu-vram", default=None, help="HA Entity ID for GPU VRAM usage")
     return ap
 
 
@@ -2665,6 +2677,9 @@ def webui_default_cfg() -> Dict[str, Any]:
         "ha_entity_uptime": "sensor.last_boot",
         "ha_entity_disk_read": "",
         "ha_entity_disk_write": "",
+        "ha_entity_gpu_util": "",
+        "ha_entity_gpu_temp": "",
+        "ha_entity_gpu_vram": "",
     }
 
 
@@ -2769,6 +2784,9 @@ def normalize_cfg(raw: Dict[str, Any]) -> Dict[str, Any]:
         "ha_entity_uptime",
         "ha_entity_disk_read",
         "ha_entity_disk_write",
+        "ha_entity_gpu_util",
+        "ha_entity_gpu_temp",
+        "ha_entity_gpu_vram",
     ]:
         cfg[ha_key] = _clean_str(raw.get(ha_key, cfg[ha_key]), cfg[ha_key])
     return cfg
@@ -2850,6 +2868,9 @@ def cfg_to_agent_args(cfg: Dict[str, Any]) -> list[str]:
         ("ha_entity_uptime", "--ha-entity-uptime"),
         ("ha_entity_disk_read", "--ha-entity-disk-read"),
         ("ha_entity_disk_write", "--ha-entity-disk-write"),
+        ("ha_entity_gpu_util", "--ha-entity-gpu-util"),
+        ("ha_entity_gpu_temp", "--ha-entity-gpu-temp"),
+        ("ha_entity_gpu_vram", "--ha-entity-gpu-vram"),
     ]:
         val = _clean_str(cfg.get(key), "")
         if val:
@@ -3607,6 +3628,21 @@ def create_app(
         <label for=\"ha_entity_fan\">Fan Speed Entity (RPM)</label>
         <input type=\"text\" name=\"ha_entity_fan\" id=\"ha_entity_fan\" value=\"{html.escape(str(cfg.get('ha_entity_fan', '')))}\" placeholder=\"sensor.fan_speed\" list=\"haSensorsList\">
         <div class=\"hint\">Optional. Entity ID for fan speed (e.g. <code>sensor.fan_speed</code>)</div>
+      </div>
+      <div class=\"field\">
+        <label for=\"ha_entity_gpu_util\">GPU Utilization Entity (%)</label>
+        <input type=\"text\" name=\"ha_entity_gpu_util\" id=\"ha_entity_gpu_util\" value=\"{html.escape(str(cfg.get('ha_entity_gpu_util', '')))}\" placeholder=\"sensor.gpu_utilization\" list=\"haSensorsList\">
+        <div class=\"hint\">Optional. Entity ID for GPU utilization (e.g. <code>sensor.gpu_utilization</code>)</div>
+      </div>
+      <div class=\"field\">
+        <label for=\"ha_entity_gpu_temp\">GPU Temperature Entity</label>
+        <input type=\"text\" name=\"ha_entity_gpu_temp\" id=\"ha_entity_gpu_temp\" value=\"{html.escape(str(cfg.get('ha_entity_gpu_temp', '')))}\" placeholder=\"sensor.gpu_temperature\" list=\"haSensorsList\">
+        <div class=\"hint\">Optional. Entity ID for GPU temperature (e.g. <code>sensor.gpu_temperature</code>)</div>
+      </div>
+      <div class=\"field\">
+        <label for=\"ha_entity_gpu_vram\">GPU VRAM Usage Entity (%)</label>
+        <input type=\"text\" name=\"ha_entity_gpu_vram\" id=\"ha_entity_gpu_vram\" value=\"{html.escape(str(cfg.get('ha_entity_gpu_vram', '')))}\" placeholder=\"sensor.gpu_vram_usage\" list=\"haSensorsList\">
+        <div class=\"hint\">Optional. Entity ID for GPU VRAM usage (e.g. <code>sensor.gpu_vram_usage</code>)</div>
       </div>
       </div></details>
       """

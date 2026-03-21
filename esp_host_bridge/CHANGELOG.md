@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.03.21.33
+- Added optional Home Assistant sensor support for GPU Metrics (Utilization, Temperature, and VRAM Usage).
+- Added optional Home Assistant sensor support for Cooling (Fan Speed).
+- Synchronized Web UI configuration with the new GPU and Cooling entities.
+
 ## 2026.03.21.32
 - Fixed "Missing required option 'serial_port'" and restored backward compatibility for Home Assistant entity settings.
 - Restored Serial Port selector (device dropdown) and added explicit device mapping support.
