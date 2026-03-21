@@ -1,8 +1,11 @@
 # Changelog
 
+## 2026.03.21.13
+- Reverted advanced UI selectors (device/entity) to restore add-on visibility in Home Assistant. Standard text fields are used for now to ensure compatibility.
+
 ## 2026.03.21.12
 - Added native Home Assistant serial device selector to the Add-on Configuration tab for easier port selection.
-
+...
 ## 2026.03.21.11
 - Added native Home Assistant entity selectors to the Add-on Configuration tab for easier setup and auto-completion.
 ...
