@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.21.41
+- Rollback to last stable state (v2026.03.21.33) to restore full Web UI functionality.
+- Maintained support for Home Assistant GPU and Fan sensors.
+
 ## 2026.03.21.33
 - Added optional Home Assistant sensor support for GPU Metrics (Utilization, Temperature, and VRAM Usage).
 - Added optional Home Assistant sensor support for Cooling (Fan Speed).
