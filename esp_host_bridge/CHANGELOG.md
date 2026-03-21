@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.21.25
+- Removed Home Assistant entity configurations from the Add-on Configuration tab (manage them in the Web UI instead).
+- Reverted Serial Port to an optional text field to ensure it is always visible and allows for hardware-free testing.
+
 ## 2026.03.21.24
 - Eliminated unnecessary `404: Not Found` errors by only querying Home Assistant for sensors that are explicitly configured.
 
