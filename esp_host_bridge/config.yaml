@@ -1,5 +1,5 @@
 name: "ESP Host Bridge"
-version: "2026.03.21.29"
+version: "2026.03.21.31"
 slug: "esp_host_bridge"
 description: "USB CDC bridge and host telemetry web UI for ESP display devices."
 url: "https://github.com/rog713/ESP-Host-Bridge"
@@ -28,7 +28,6 @@ devices:
 webui: "http://[HOST]:[PORT:8654]"
 watchdog: "http://[HOST]:[PORT:8654]/api/status"
 options:
-  serial_port: null
   baud: 115200
   interval: 1.0
   timeout: 2.0
@@ -62,3 +61,14 @@ schema:
   activity_limit: "int(1,25)"
   activity_lookback_minutes: "int(5,1440)"
   gpu_polling_enabled: "bool"
+  ha_entity_cpu: "entity(domain=sensor)?"
+  ha_entity_mem: "entity(domain=sensor)?"
+  ha_entity_temp: "entity(domain=sensor)?"
+  ha_entity_disk_pct: "entity(domain=sensor)?"
+  ha_entity_net_rx: "entity(domain=sensor)?"
+  ha_entity_net_tx: "entity(domain=sensor)?"
+  ha_entity_fan: "entity(domain=sensor)?"
+  ha_entity_disk_temp: "entity(domain=sensor)?"
+  ha_entity_uptime: "entity(domain=sensor)?"
+  ha_entity_disk_read: "entity(domain=sensor)?"
+  ha_entity_disk_write: "entity(domain=sensor)?"

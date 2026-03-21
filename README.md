@@ -9,7 +9,7 @@ Home Assistant expects `repository.yaml` at the Git repository root for third-pa
 
 ## Current App
 
-- Version: `2026.03.21.29`
+- Version: `2026.03.21.31`
 - **Required**: **System Monitor** integration (for HA mode telemetry).
 - Home Assistant app mode replaces Docker and VM views with:
   - `Add-ons`
