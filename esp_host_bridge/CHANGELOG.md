@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026.03.21.22
+- Optimized sensor discovery to prioritize entities starting with `sensor.system_monitor_` for more accurate auto-configuration.
+
 ## 2026.03.21.21
 - Improved sensor auto-discovery with support for German localized names (e.g., `prozessornutzung`).
 - Enhanced internal logging for Home Assistant requests to diagnose discovery and value issues.

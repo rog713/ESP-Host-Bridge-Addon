@@ -434,6 +434,38 @@ def discover_ha_proxy_entities(timeout: float = 5.0) -> Dict[str, str]:
     def _match(eid: str, matches: list[str]) -> bool:
         return any(m in eid.lower() for m in matches)
 
+    # First pass: look specifically for sensor.system_monitor_* (highly likely matches)
+    for item in states:
+        eid = item.get("entity_id", "")
+        if not eid.startswith("sensor.system_monitor_"):
+            continue
+        attrs = item.get("attributes", {})
+        uom = attrs.get("unit_of_measurement", "")
+        dev_class = attrs.get("device_class", "")
+
+        # CPU Usage
+        if not found.get("ha_entity_cpu") and uom == "%" and _match(eid, ["prozessornutzung", "processor_use", "cpu_usage"]):
+            found["ha_entity_cpu"] = eid
+        # Memory Usage
+        if not found.get("ha_entity_mem") and uom == "%" and _match(eid, ["arbeitsspeicherauslastung", "memory_use_percent", "ram_usage"]):
+            found["ha_entity_mem"] = eid
+        # Temperature
+        if not found.get("ha_entity_temp") and uom in ["°C", "°F"] and _match(eid, ["prozessortemperatur", "processor_temperature", "cpu_temp"]):
+            found["ha_entity_temp"] = eid
+        # Disk Usage
+        if not found.get("ha_entity_disk_pct") and uom == "%" and _match(eid, ["massenspeicher_auslastung", "disk_usage", "disk_use"]):
+             found["ha_entity_disk_pct"] = eid
+        # Network RX
+        if not found.get("ha_entity_net_rx") and (uom in ["B/s", "kB/s", "MB/s", "KiB/s", "MiB/s"] or dev_class == "data_rate") and _match(eid, ["eingehender_netzwerkdurchsatz", "network_throughput_in", "rx_speed"]):
+             found["ha_entity_net_rx"] = eid
+        # Network TX
+        if not found.get("ha_entity_net_tx") and (uom in ["B/s", "kB/s", "MB/s", "KiB/s", "MiB/s"] or dev_class == "data_rate") and _match(eid, ["ausgehender_netzwerkdurchsatz", "network_throughput_out", "tx_speed"]):
+             found["ha_entity_net_tx"] = eid
+        # Uptime
+        if not found.get("ha_entity_uptime") and (dev_class in ["timestamp", "duration"] or _match(eid, ["letzter_systemstart", "last_boot", "uptime"])):
+             found["ha_entity_uptime"] = eid
+
+    # Second pass: general match for any remaining fields
     for item in states:
         eid = item.get("entity_id", "")
         if not eid.startswith("sensor."):
