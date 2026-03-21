@@ -1,8 +1,11 @@
 # Changelog
 
+## 2026.03.21.12
+- Added native Home Assistant serial device selector to the Add-on Configuration tab for easier port selection.
+
 ## 2026.03.21.11
 - Added native Home Assistant entity selectors to the Add-on Configuration tab for easier setup and auto-completion.
-
+...
 ## 2026.03.21.10
 - Fixed Home Assistant Proxy entities not being passed to the agent process, which caused metrics to stay in "Waiting..." status.
 ...

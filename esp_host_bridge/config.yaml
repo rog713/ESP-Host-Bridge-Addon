@@ -1,5 +1,5 @@
 name: "ESP Host Bridge"
-version: "2026.03.21.11"
+version: "2026.03.21.12"
 slug: "esp_host_bridge"
 description: "USB CDC bridge and host telemetry web UI for ESP display devices."
 url: "https://github.com/rog713/ESP-Host-Bridge"
@@ -58,7 +58,7 @@ options:
   ha_entity_disk_read: ""
   ha_entity_disk_write: ""
 schema:
-  serial_port: "str?"
+  serial_port: "device(subsystem=tty)?"
   baud: "int(1200,4000000)"
   interval: "float(0.1,)"
   timeout: "float(0.1,)"
