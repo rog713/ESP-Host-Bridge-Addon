@@ -25,3 +25,6 @@ If Home Assistant is running on a different machine than the ESP device or the m
 ## Reset direct Web UI password
 
 If you forget the direct Web UI password, open the add-on through Home Assistant Ingress, go to `Direct Web UI Security`, and either disable protection or set a new password, then save and restart the add-on.
+## Credits
+
+- [LordGuenni](https://github.com/LordGuenni) for the original pull request and add-on packaging ideas that informed parts of the current Home Assistant add-on layout.
