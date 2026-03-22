@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.03.22.6
+
+- Removed the Home Assistant Configuration form.
+- Settings are now managed only through the Web UI.
+
 ## 2026.03.22.5
 - Added basic password protection for direct Web UI access.
 - Trusts Home Assistant ingress and keeps `/api/status` open for add-on health checks.

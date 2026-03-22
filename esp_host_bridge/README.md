@@ -4,7 +4,7 @@
 
 ## Contents
 
-- `config.yaml`: add-on manifest and configuration schema
+- `config.yaml`: add-on manifest
 - `app/`: runtime and Web UI
-- `start_addon.py`: startup and config sync
+- `start_addon.py`: startup wrapper
 - `run.sh`: container entrypoint

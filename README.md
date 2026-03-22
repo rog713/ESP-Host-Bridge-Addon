@@ -8,13 +8,14 @@ This repository contains the Home Assistant add-on for `ESP Host Bridge`.
 2. Install `ESP Host Bridge`.
 3. Start the add-on.
 4. Open the Web UI through Home Assistant Ingress or the direct add-on URL.
-5. Select the serial port and save your settings.
+5. Open the Web UI and configure your settings there.
 
 ## What it does
 
 - sends host telemetry to an ESP display over USB CDC
 - shows Home Assistant add-ons, integrations, and recent activity in the Web UI
 - reads local host metrics such as CPU, memory, network, and disk
+- keeps configuration in the Web UI instead of the Home Assistant Configuration page
 
 ## Best fit
 

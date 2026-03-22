@@ -1,5 +1,5 @@
 name: "ESP Host Bridge"
-version: "2026.03.22.5"
+version: "2026.03.22.6"
 slug: "esp_host_bridge"
 description: "USB CDC bridge and host telemetry web UI for ESP display devices."
 url: "https://github.com/rog713/ESP-Host-Bridge-Addon"
@@ -27,43 +27,3 @@ full_access: false
 apparmor: true
 webui: "http://[HOST]:[PORT:8654]"
 watchdog: "http://[HOST]:[PORT:8654]/api/status"
-options:
-  serial_port: null
-  baud: "115200"
-  interval: 1.0
-  timeout: 2.0
-  iface: ""
-  addons_polling_enabled: true
-  addons_interval: 2.0
-  integrations_polling_enabled: true
-  integrations_interval: 5.0
-  activity_polling_enabled: true
-  activity_interval: 10.0
-  activity_limit: 12
-  activity_lookback_minutes: 180
-  gpu_polling_enabled: true
-  disk_device: ""
-  disk_temp_device: ""
-  cpu_temp_sensor: ""
-  fan_sensor: ""
-  power_control_enabled: false
-schema:
-  serial_port: "device(subsystem=tty)?"
-  baud: "list(1200|2400|4800|9600|19200|38400|57600|115200|230400|460800|921600|1000000|2000000|4000000)"
-  interval: "float(0.1,)"
-  timeout: "float(0.1,)"
-  iface: "str?"
-  addons_polling_enabled: "bool"
-  addons_interval: "float(0,)"
-  integrations_polling_enabled: "bool"
-  integrations_interval: "float(0,)"
-  activity_polling_enabled: "bool"
-  activity_interval: "float(0,)"
-  activity_limit: "int(1,25)"
-  activity_lookback_minutes: "int(5,1440)"
-  gpu_polling_enabled: "bool"
-  disk_device: "str?"
-  disk_temp_device: "str?"
-  cpu_temp_sensor: "str?"
-  fan_sensor: "str?"
-  power_control_enabled: "bool"

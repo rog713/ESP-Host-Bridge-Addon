@@ -8,9 +8,8 @@ Use this add-on when Home Assistant, the ESP device, and the host resources you 
 
 ## How it works
 
-- add-on options are stored in `/data/options.json`
 - runtime settings are stored in `/data/config.json`
-- add-on options are synced into the runtime config on startup
+- settings are managed in the Web UI
 - the Web UI is available through Home Assistant Ingress
 - direct Web UI access can be protected with a password
 
