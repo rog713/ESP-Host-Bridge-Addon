@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.22.4
+- Disabled `full_access` to test whether the current add-on can run under the narrower Home Assistant permission model.
+- Kept `host_network`, `host_uts`, `udev`, `uart`, and AppArmor enabled so the hardening delta stays isolated.
+
 ## 2026.03.22.3
 - Re-enabled the default Home Assistant AppArmor profile for the add-on.
 - Kept the existing host-network runtime model unchanged.

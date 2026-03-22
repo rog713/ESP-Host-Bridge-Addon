@@ -1,5 +1,5 @@
 name: "ESP Host Bridge"
-version: "2026.03.22.3"
+version: "2026.03.22.4"
 slug: "esp_host_bridge"
 description: "USB CDC bridge and host telemetry web UI for ESP display devices."
 url: "https://github.com/rog713/ESP-Host-Bridge"
@@ -23,7 +23,7 @@ hassio_role: manager
 homeassistant_api: true
 udev: true
 uart: true
-full_access: true
+full_access: false
 apparmor: true
 webui: "http://[HOST]:[PORT:8654]"
 watchdog: "http://[HOST]:[PORT:8654]/api/status"
