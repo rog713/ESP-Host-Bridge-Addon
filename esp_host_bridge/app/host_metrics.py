@@ -3233,6 +3233,7 @@ def create_app(
         restart_action = _prefixed_path("/restart")
         stop_action = _prefixed_path("/stop")
         refresh_action = _prefixed_path("/")
+        logout_action = _prefixed_path("/logout")
         static_js = _prefixed_path("/static/host/host_ui.js")
         msg = request.args.get("msg", "").strip()
         err = request.args.get("err", "").strip()
@@ -3461,6 +3462,7 @@ def create_app(
             <form method="post" action="{html.escape(restart_action)}" style="display:inline;"><button type="submit">Restart</button></form>
             <form method="post" action="{html.escape(stop_action)}" style="display:inline;"><button class="danger" type="submit">Stop</button></form>
             <form method="get" action="{html.escape(refresh_action)}" style="display:inline;"><button class="secondary" type="submit">Refresh</button></form>
+            {'<form method="post" action="' + html.escape(logout_action) + '" style="display:inline;"><button class="secondary" type="submit">Sign Out</button></form>' if _webui_auth_required() and not ingress_request_active() else ''}
           </div>
         </div>
         <div class="hero-art" aria-hidden="true"><span class="mdi mdi-chart-timeline-variant"></span></div>
