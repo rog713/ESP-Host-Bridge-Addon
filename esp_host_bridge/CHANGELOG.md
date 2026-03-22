@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.22.3
+- Re-enabled the default Home Assistant AppArmor profile for the add-on.
+- Kept the existing host-network runtime model unchanged.
+
 ## 2026.03.22.2
 - Fixed Home Assistant Ingress path handling in the Web UI.
 - Removed absolute `/api/...` and `/static/...` assumptions from the add-on frontend.
