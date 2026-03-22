@@ -6,7 +6,9 @@ ESP Host Bridge runs the Host Bridge Web UI inside Home Assistant for the ESP da
 
 - runs `host_metrics.py webui`
 - stores Web UI config in `/data/config.json`
+- syncs add-on configuration into `/data/config.json` on startup
 - serves the Web UI on port `8654`
+- exposes the Web UI through Home Assistant Ingress
 
 ## When to use it
 
@@ -42,9 +44,18 @@ Why:
 2. Restart Home Assistant or reload the app store.
 3. Install `ESP Host Bridge`.
 4. Start the add-on and open the Web UI.
-5. Configure the serial port, network interface, and any add-on, integration, or activity polling you want.
+5. Configure the serial port and any polling or sensor options you want.
 
 ## Behavior
+
+### Configuration
+
+The add-on now has two entry points that stay aligned:
+
+- the Home Assistant add-on Configuration tab writes `/data/options.json`
+- the launcher syncs those values into `/data/config.json` before starting the Web UI
+
+You can still adjust settings from the Web UI. The add-on Configuration tab is now a first-class way to set stable defaults.
 
 ### Serial
 
@@ -72,3 +83,5 @@ Shutdown and restart use the Supervisor host API:
 ## Persistence
 
 Host Bridge settings are stored in `/data/config.json`.
+
+Home Assistant add-on options are stored in `/data/options.json` and merged into `/data/config.json` during startup.

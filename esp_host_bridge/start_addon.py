@@ -24,6 +24,29 @@ def load_options() -> dict[str, object]:
     return payload if isinstance(payload, dict) else {}
 
 
+def sync_config(options: dict[str, object]) -> None:
+    config: dict[str, object] = {}
+    if CONFIG_PATH.exists():
+        try:
+            loaded = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                config = loaded
+        except Exception:
+            pass
+
+    updated = False
+    for key, value in options.items():
+        if key in ("webui_host", "webui_port"):
+            continue
+        if key not in config or config.get(key) != value:
+            config[key] = value
+            updated = True
+
+    if updated or not CONFIG_PATH.exists():
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
+
+
 def coerce_host(value: object) -> str:
     text = str(value or "").strip()
     return text or DEFAULT_HOST
@@ -68,6 +91,7 @@ def build_argv(env: dict[str, str]) -> list[str]:
 
 def main() -> int:
     options = load_options()
+    sync_config(options)
     env = build_env(options)
     argv = build_argv(env)
 
