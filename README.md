@@ -1,4 +1,4 @@
-# ESP Host Bridge Home Assistant Repository
+# ESP Host Bridge Add-on Repository
 
 This repository is a standalone Home Assistant add-on repository for `ESP Host Bridge`.
 
@@ -23,7 +23,7 @@ This repository is arranged for that layout.
 
 ## Install
 
-1. Add `https://github.com/rog713/ESP-Host-Bridge` as a custom Home Assistant add-on repository.
+1. Add `https://github.com/rog713/ESP-Host-Bridge-Addon` as a custom Home Assistant add-on repository.
 2. Install `ESP Host Bridge`.
 3. Start the add-on.
 4. Open the Web UI through Home Assistant Ingress or the direct add-on URL.
