@@ -1,6 +1,14 @@
 const hostMetricsBoot = (window.__HOST_METRICS_BOOT__ && typeof window.__HOST_METRICS_BOOT__ === 'object')
   ? window.__HOST_METRICS_BOOT__
   : {};
+const hostMetricsBasePath = String(hostMetricsBoot.basePath || '').replace(/\/+$/, '');
+function hostMetricsUrl(path) {
+  const raw = String(path || '');
+  if (!raw) return hostMetricsBasePath || '/';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const normalized = raw.startsWith('/') ? raw : `/${raw}`;
+  return hostMetricsBasePath ? `${hostMetricsBasePath}${normalized}` : normalized;
+}
 let nextLogId = Number(hostMetricsBoot.nextLogId || 1);
 if (!Number.isFinite(nextLogId) || nextLogId < 1) nextLogId = 1;
 let nextCommLogId = Number(hostMetricsBoot.nextCommLogId || 1);
@@ -272,7 +280,7 @@ function updateHomeAssistantSummary(s) {
 }
 async function pollStatus() {
   try {
-    const r = await fetch('/api/status');
+    const r = await fetch(hostMetricsUrl('/api/status'));
     const s = await r.json();
     const started = s.started_at ? new Date(s.started_at * 1000).toLocaleString() : '--';
     document.getElementById('statusLine').innerHTML = `Agent: <b>${s.running ? 'Running' : 'Stopped'}</b> | PID: <b>${s.pid ?? '--'}</b> | Started: <b>${started}</b> | Last Exit Code: <b>${s.last_exit ?? '--'}</b>`;
@@ -1416,7 +1424,7 @@ function updateEspPreview(s) {
 
 async function pollLogs() {
   try {
-    const r = await fetch(`/api/logs?since=${nextLogId}`);
+    const r = await fetch(hostMetricsUrl(`/api/logs?since=${nextLogId}`));
     const data = await r.json();
     for (const row of data.lines) { mainLogRows.push(row); nextLogId = row.id + 1; }
     renderMainLogs();
@@ -1441,7 +1449,7 @@ function renderMainLogs() {
 }
 async function pollCommLogs() {
   try {
-    const r = await fetch(`/api/comm-logs?since=${nextCommLogId}`);
+    const r = await fetch(hostMetricsUrl(`/api/comm-logs?since=${nextCommLogId}`));
     const data = await r.json();
     const box = document.getElementById('commLogs');
     if (!box) return;
@@ -1625,7 +1633,7 @@ function syncFanSensorSelection(preferredValue) {
   syncSavedSelectOptions(sel, value, value);
 }
 async function fetchHardwareChoices() {
-  const r = await fetch('/api/hardware-choices');
+  const r = await fetch(hostMetricsUrl('/api/hardware-choices'));
   return await r.json();
 }
 async function refreshInterfaceChoices() {
@@ -1798,7 +1806,7 @@ async function refreshSerialPorts() {
   result.textContent = 'Refreshing...';
   btn.disabled = true;
   try {
-    const r = await fetch('/api/ports');
+    const r = await fetch(hostMetricsUrl('/api/ports'));
     const data = await r.json();
     const ports = (data && Array.isArray(data.ports)) ? data.ports : [];
     fillSelect(sel, ports, '(no serial ports found)');
@@ -1852,7 +1860,7 @@ async function testSerialPort() {
   result.textContent = 'Testing...';
   btn.disabled = true;
   try {
-    const r = await fetch('/api/test-serial', {
+    const r = await fetch(hostMetricsUrl('/api/test-serial'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ port: portEl.value, baud: Number(baudEl.value || 115200) })
@@ -1873,7 +1881,7 @@ async function clearLogs() {
   if (!btn || !box) return;
   btn.disabled = true;
   try {
-    const r = await fetch('/api/logs/clear', { method: 'POST' });
+    const r = await fetch(hostMetricsUrl('/api/logs/clear'), { method: 'POST' });
     if (r.ok) {
       mainLogRows = [];
       renderMainLogs();
@@ -1886,7 +1894,7 @@ async function clearLogs() {
 }
 
 function downloadLogs() {
-  window.location.href = '/api/logs/text';
+  window.location.href = hostMetricsUrl('/api/logs/text');
 }
 function initMainLogsBuffer() {
   const box = document.getElementById('logs');
@@ -1927,7 +1935,7 @@ async function clearCommLogs() {
   if (!btn || !box) return;
   btn.disabled = true;
   try {
-    const r = await fetch('/api/comm-logs/clear', { method: 'POST' });
+    const r = await fetch(hostMetricsUrl('/api/comm-logs/clear'), { method: 'POST' });
     if (r.ok) {
       box.textContent = 'No communication events yet. Serial disconnects/reconnects will appear here.';
       nextCommLogId = 1;
@@ -1939,7 +1947,7 @@ async function clearCommLogs() {
 }
 
 function downloadCommLogs() {
-  window.location.href = '/api/comm-logs/text';
+  window.location.href = hostMetricsUrl('/api/comm-logs/text');
 }
 
 function initSectionState() {

@@ -2280,7 +2280,28 @@ def webui_default_cfg() -> Dict[str, Any]:
 def _redir(value: str, key: str = "msg"):
     from flask import redirect
 
-    return redirect(f"/?{key}={quote_plus(value)}")
+    return redirect(_prefixed_path(f"/?{key}={quote_plus(value)}"))
+
+
+def _request_base_path() -> str:
+    from flask import request
+
+    for candidate in (
+        request.headers.get("X-Ingress-Path"),
+        request.script_root,
+    ):
+        text = str(candidate or "").strip()
+        if text:
+            return text.rstrip("/")
+    return ""
+
+
+def _prefixed_path(path: str) -> str:
+    raw = str(path or "").strip() or "/"
+    if not raw.startswith("/"):
+        raw = "/" + raw
+    base = _request_base_path()
+    return f"{base}{raw}" if base else raw
 
 
 def _clean_str(v: Any, default: str = "") -> str:
@@ -2861,6 +2882,7 @@ def _render_topbar_subtitle() -> str:
 def page_html(title: str, body: str) -> str:
     mode_toggle_html = _render_mode_toggle_html()
     topbar_subtitle = _render_topbar_subtitle()
+    static_css = _prefixed_path("/static/host/host_ui.css")
     return f"""<!doctype html>
 <html>
 <head>
@@ -2872,7 +2894,7 @@ def page_html(title: str, body: str) -> str:
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,0&display=swap">
   <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-  <link rel="stylesheet" href="/static/host/host_ui.css">
+  <link rel="stylesheet" href="{html.escape(static_css)}">
 </head>
 <body>
   <div class="shell">
@@ -3089,6 +3111,13 @@ def create_app(
         cfg = load_cfg(cfg_path)
         logs = pub.logs_tail_text()
         comm_logs = pub.comm_logs_tail_text()
+        base_path = _request_base_path()
+        save_action = _prefixed_path("/save")
+        start_action = _prefixed_path("/start")
+        restart_action = _prefixed_path("/restart")
+        stop_action = _prefixed_path("/stop")
+        refresh_action = _prefixed_path("/")
+        static_js = _prefixed_path("/static/host/host_ui.js")
         msg = request.args.get("msg", "").strip()
         err = request.args.get("err", "").strip()
 
@@ -3223,7 +3252,7 @@ def create_app(
   <div class=\"card\">
     {msg_html}
     {err_html}
-    <form method=\"post\" action=\"/save\">
+    <form method=\"post\" action=\"{html.escape(save_action)}\">
       <div class=\"quick-setup\">
         <h3><span class="quick-setup-icon" aria-hidden="true"><span class="mdi mdi-auto-fix"></span></span>Quick Setup</h3>
         <p>For most users: pick a serial port, test it, then save and restart the agent.</p>
@@ -3276,7 +3305,7 @@ def create_app(
       </div></details>
       <div class=\"actions form-actions-sticky\">
         <button type=\"submit\">Save + Restart</button>
-        <button class=\"secondary\" type=\"submit\" formaction=\"/save?restart=0\">Save Only</button>
+        <button class=\"secondary\" type=\"submit\" formaction=\"{html.escape(save_action)}?restart=0\">Save Only</button>
       </div>
       <details class=\"section\" data-section-key=\"advanced_ui\"><summary><span class=\"section-icon\" aria-hidden=\"true\"><span class=\"mdi mdi-cog-outline\"></span></span>Advanced</summary><div class=\"section-body\">
       <div class=\"hint\">Config file: <code>{html.escape(str(cfg_path))}</code></div>
@@ -3305,10 +3334,10 @@ def create_app(
             <div class="status-pill" id="espBootReason">Last ESP Reset: --</div>
           </div>
           <div class="actions" style="margin: 0;">
-            <form method="post" action="/start" style="display:inline;"><button class="secondary" type="submit">Start</button></form>
-            <form method="post" action="/restart" style="display:inline;"><button type="submit">Restart</button></form>
-            <form method="post" action="/stop" style="display:inline;"><button class="danger" type="submit">Stop</button></form>
-            <form method="get" action="/" style="display:inline;"><button class="secondary" type="submit">Refresh</button></form>
+            <form method="post" action="{html.escape(start_action)}" style="display:inline;"><button class="secondary" type="submit">Start</button></form>
+            <form method="post" action="{html.escape(restart_action)}" style="display:inline;"><button type="submit">Restart</button></form>
+            <form method="post" action="{html.escape(stop_action)}" style="display:inline;"><button class="danger" type="submit">Stop</button></form>
+            <form method="get" action="{html.escape(refresh_action)}" style="display:inline;"><button class="secondary" type="submit">Refresh</button></form>
           </div>
         </div>
         <div class="hero-art" aria-hidden="true"><span class="mdi mdi-chart-timeline-variant"></span></div>
@@ -3686,11 +3715,12 @@ def create_app(
 </div>
 <script>
 window.__HOST_METRICS_BOOT__ = {{
+  basePath: {json.dumps(base_path)},
   nextLogId: {st['next_log_id']},
   nextCommLogId: {st.get('next_comm_log_id', 1)},
 }};
 </script>
-<script src="/static/host/host_ui.js"></script>
+<script src="{html.escape(static_js)}"></script>
 """
         return page_html("ESP Host Bridge", body)
 
@@ -3706,8 +3736,8 @@ window.__HOST_METRICS_BOOT__ = {{
             ok_run, message_run = pub.restart(cfg)
             if not ok_run:
                 return _redir(message_run, key="err")
-            return redirect("/?msg=Saved+and+restarted")
-        return redirect("/?msg=Saved")
+            return _redir("Saved and restarted", key="msg")
+        return _redir("Saved", key="msg")
 
     @app.post("/start")
     def start_proc() -> Any:

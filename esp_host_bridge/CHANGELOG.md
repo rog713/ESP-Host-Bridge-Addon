@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.03.22.2
+- Fixed Home Assistant Ingress path handling in the Web UI.
+- Removed absolute `/api/...` and `/static/...` assumptions from the add-on frontend.
+- Fixed add-on launcher validation mode so it no longer writes to `/data` during dry-run checks.
+
 ## 2026.03.22.1
 - Added Home Assistant Ingress and panel metadata for a more native add-on UI.
 - Added stable add-on `options` and `schema` entries for the Configuration tab.

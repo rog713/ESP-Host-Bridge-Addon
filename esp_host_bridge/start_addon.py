@@ -91,7 +91,6 @@ def build_argv(env: dict[str, str]) -> list[str]:
 
 def main() -> int:
     options = load_options()
-    sync_config(options)
     env = build_env(options)
     argv = build_argv(env)
 
@@ -111,6 +110,8 @@ def main() -> int:
             )
         )
         return 0
+
+    sync_config(options)
 
     os.chdir(APP_DIR)
 
