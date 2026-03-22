@@ -5,14 +5,18 @@ ESP Host Bridge runs the Host Bridge Web UI inside Home Assistant for the ESP da
 ## What it does
 
 - runs `host_metrics.py webui`
-- stores Web UI config in `/data/config.json`
-- syncs add-on configuration into `/data/config.json` on startup
+- stores Web UI settings in `/data/config.json`
+- syncs add-on Configuration-tab values from `/data/options.json` into `/data/config.json` on startup
 - serves the Web UI on port `8654`
 - exposes the Web UI through Home Assistant Ingress
+- can protect direct Web UI access with a password
 
 ## When to use it
 
-Use this add-on only when Home Assistant is on the same machine as the ESP USB device and the host resources you want to monitor.
+Use this add-on when Home Assistant is on the same machine as:
+
+- the ESP USB device
+- the host resources you want to monitor
 
 Poor fit:
 
@@ -20,9 +24,8 @@ Poor fit:
 
 ## Permissions
 
-This add-on intentionally asks for broad host access:
+Current add-on permissions:
 
-- `full_access: true`
 - `host_network: true`
 - `host_uts: true`
 - `hassio_api: true`
@@ -30,40 +33,52 @@ This add-on intentionally asks for broad host access:
 - `hassio_role: manager`
 - `udev: true`
 - `uart: true`
-- `apparmor: false`
+- `full_access: false`
+- `apparmor: true`
 
 Why:
 
 - serial access needs host device visibility
 - add-ons, integrations, activity, and host power use Supervisor/Core APIs
-- disk and SMART access need real block-device visibility when available
+- local host telemetry still uses host-visible network, procfs, thermal, and disk paths where available
 
 ## Install
 
-1. Copy `host_metrics/homeassistant_addon/esp_host_bridge/` to `/addons/esp_host_bridge/` on the Home Assistant host.
-2. Restart Home Assistant or reload the app store.
-3. Install `ESP Host Bridge`.
-4. Start the add-on and open the Web UI.
-5. Configure the serial port and any polling or sensor options you want.
+1. Add this repository to Home Assistant as a custom add-on repository.
+2. Install `ESP Host Bridge`.
+3. Start the add-on and open the Web UI.
+4. Configure the serial port and any telemetry or polling options you want.
 
 ## Behavior
 
 ### Configuration
 
-The add-on now has two entry points that stay aligned:
+The add-on keeps two config entry points aligned:
 
-- the Home Assistant add-on Configuration tab writes `/data/options.json`
-- the launcher syncs those values into `/data/config.json` before starting the Web UI
+- Home Assistant add-on options in `/data/options.json`
+- Host Bridge runtime config in `/data/config.json`
 
-You can still adjust settings from the Web UI. The add-on Configuration tab is now a first-class way to set stable defaults.
+The launcher syncs add-on options into the runtime config before the Web UI starts.
 
 ### Serial
 
-The add-on reads the ESP over `/dev` on the Home Assistant host. The exact device path depends on your system.
+The add-on reads the ESP over a host-visible serial device path, typically under `/dev/serial/by-id/` when available.
+
+### Metrics
+
+The add-on still uses local host telemetry for:
+
+- CPU
+- memory
+- uptime
+- network RX/TX
+- disk usage
+- disk IO
+- temperature and fan sensors when available
 
 ### Add-ons
 
-Add-on data comes from the Supervisor API. No host Docker socket is used.
+Add-on data comes from the Home Assistant Supervisor API.
 
 ### Integrations
 
@@ -80,8 +95,13 @@ Shutdown and restart use the Supervisor host API:
 - `POST /host/shutdown`
 - `POST /host/reboot`
 
+### Direct Web UI protection
+
+Home Assistant Ingress is trusted and uses Home Assistant auth.
+
+Direct access to the add-on Web UI can be protected with a password from the Web UI setup page. The password is stored as a hash in `/data/config.json`.
+
 ## Persistence
 
-Host Bridge settings are stored in `/data/config.json`.
-
-Home Assistant add-on options are stored in `/data/options.json` and merged into `/data/config.json` during startup.
+- runtime settings: `/data/config.json`
+- add-on options: `/data/options.json`
