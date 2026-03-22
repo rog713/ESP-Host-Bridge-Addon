@@ -21,3 +21,6 @@ This repository contains the Home Assistant add-on for `ESP Host Bridge`.
 Use this add-on when Home Assistant, the ESP device, and the host resources you want to monitor are all on the same machine.
 
 If Home Assistant is running on a different machine than the ESP device or the monitored host, use the regular Host Bridge install instead.
+## Reset direct Web UI password
+
+If you forget the direct Web UI password, open the add-on through Home Assistant Ingress, go to `Direct Web UI Security`, and either disable protection or set a new password, then save and restart the add-on.
