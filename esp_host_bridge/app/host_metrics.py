@@ -12,6 +12,7 @@ import logging
 import os
 import platform
 import re
+import secrets
 import shlex
 import signal
 import socket
@@ -48,6 +49,12 @@ try:
     import yaml  # type: ignore
 except Exception:
     yaml = None
+
+try:
+    from werkzeug.security import check_password_hash, generate_password_hash
+except Exception:
+    check_password_hash = None  # type: ignore[assignment]
+    generate_password_hash = None  # type: ignore[assignment]
 
 SERIAL_RETRY_SECONDS = 2
 RX_BUFFER_MAX_BYTES = 4096
@@ -2274,6 +2281,9 @@ def webui_default_cfg() -> Dict[str, Any]:
         "cpu_temp_sensor": "",
         "fan_sensor": "",
         "power_control_enabled": False,
+        "webui_auth_enabled": False,
+        "webui_password_hash": "",
+        "webui_session_secret": "",
     }
 
 
@@ -2382,6 +2392,9 @@ def normalize_cfg(raw: Dict[str, Any]) -> Dict[str, Any]:
         raw.get("power_control_enabled", raw.get("allow_host_cmds", cfg["power_control_enabled"])),
         cfg["power_control_enabled"],
     )
+    cfg["webui_auth_enabled"] = _clean_bool(raw.get("webui_auth_enabled", cfg["webui_auth_enabled"]), cfg["webui_auth_enabled"])
+    cfg["webui_password_hash"] = _clean_str(raw.get("webui_password_hash", cfg["webui_password_hash"]), cfg["webui_password_hash"])
+    cfg["webui_session_secret"] = _clean_str(raw.get("webui_session_secret", cfg["webui_session_secret"]), cfg["webui_session_secret"])
     return cfg
 
 
@@ -2403,6 +2416,28 @@ def validate_cfg(cfg: Dict[str, Any]) -> tuple[bool, str]:
     if _clean_int(cfg.get("activity_lookback_minutes"), 0) <= 0:
         return False, "activity_lookback_minutes must be > 0"
     return True, "ok"
+
+
+def ensure_webui_session_secret(cfg: Dict[str, Any]) -> tuple[Dict[str, Any], bool]:
+    updated = dict(cfg)
+    secret_value = _clean_str(updated.get("webui_session_secret"), "")
+    if secret_value:
+        return updated, False
+    updated["webui_session_secret"] = secrets.token_hex(32)
+    return updated, True
+
+
+def ingress_request_active() -> bool:
+    from flask import request
+
+    for candidate in (
+        request.headers.get("X-Ingress-Path"),
+        request.script_root,
+    ):
+        text = str(candidate or "").strip()
+        if text.startswith("/api/hassio_ingress/"):
+            return True
+    return False
 
 
 def load_cfg(path: Path) -> Dict[str, Any]:
@@ -2947,6 +2982,7 @@ def cfg_from_form(form: Any) -> Dict[str, Any]:
             "cpu_temp_sensor": form.get("cpu_temp_sensor"),
             "fan_sensor": form.get("fan_sensor"),
             "power_control_enabled": _has_checkbox("power_control_enabled"),
+            "webui_auth_enabled": _has_checkbox("webui_auth_enabled"),
         }
     )
 
@@ -3075,7 +3111,7 @@ def create_app(
     autostart_override: Optional[bool] = None,
 ) -> Any:
     try:
-        from flask import Flask, Response, jsonify, redirect, request, send_file
+        from flask import Flask, Response, jsonify, redirect, request, send_file, session
     except Exception as e:
         raise RuntimeError("Flask is required for webui mode. Install with: pip install flask") from e
 
@@ -3091,6 +3127,12 @@ def create_app(
     python_bin = os.environ.get("WEBUI_PYTHON", sys.executable or "python3")
     self_script = Path(os.environ.get("PORTABLE_HOST_METRICS_SCRIPT", str(Path(__file__).resolve())))
     pub = RunnerManager(self_script=self_script, python_bin=python_bin)
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    initial_cfg = load_cfg(cfg_path)
+    initial_cfg, secret_updated = ensure_webui_session_secret(initial_cfg)
+    if secret_updated or not cfg_path.exists():
+        atomic_write_json(cfg_path, initial_cfg)
+    app.secret_key = str(initial_cfg.get("webui_session_secret") or secrets.token_hex(32))
 
     try:
         from host_metrics.host_metrics_ui_assets import register_host_static_routes
@@ -3105,6 +3147,80 @@ def create_app(
             register_host_static_routes = _register_host_static_routes_fallback
 
     register_host_static_routes(app)
+
+    def _webui_auth_required() -> bool:
+        if ingress_request_active():
+            return False
+        cfg = load_cfg(cfg_path)
+        return _clean_bool(cfg.get("webui_auth_enabled"), False) and bool(_clean_str(cfg.get("webui_password_hash"), ""))
+
+    def _safe_next_target(raw_value: Any) -> str:
+        text = str(raw_value or "").strip() or "/"
+        return text if text.startswith("/") else "/"
+
+    def _login_redirect() -> Any:
+        next_target = _safe_next_target(request.full_path if request.query_string else request.path)
+        if next_target.endswith("?"):
+            next_target = next_target[:-1]
+        return redirect(_prefixed_path(f"/login?next={quote_plus(next_target)}"))
+
+    @app.before_request
+    def require_webui_login() -> Any:
+        path = str(request.path or "")
+        if not _webui_auth_required():
+            return None
+        if path in {"/login", "/logout", "/api/status"}:
+            return None
+        if path.startswith("/static/host/"):
+            return None
+        if session.get("webui_authenticated") is True:
+            return None
+        if path.startswith("/api/"):
+            return jsonify({"ok": False, "message": "Authentication required"}), 401
+        return _login_redirect()
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login() -> Any:
+        cfg = load_cfg(cfg_path)
+        auth_enabled = _clean_bool(cfg.get("webui_auth_enabled"), False)
+        password_hash = _clean_str(cfg.get("webui_password_hash"), "")
+        if not auth_enabled or not password_hash or ingress_request_active():
+            return redirect(_prefixed_path("/"))
+
+        next_target = _safe_next_target(request.values.get("next", "/"))
+        err_html = ""
+        if request.method == "POST":
+            if check_password_hash is None:
+                err_html = '<div class="err">Password support is unavailable in this runtime.</div>'
+            else:
+                submitted = str(request.form.get("password") or "")
+                if submitted and check_password_hash(password_hash, submitted):
+                    session["webui_authenticated"] = True
+                    return redirect(_prefixed_path(next_target))
+                err_html = '<div class="err">Incorrect password.</div>'
+
+        body = f"""
+<div class="grid">
+  <div class="card" style="max-width:520px; margin:40px auto;">
+    <h2>Direct Web UI Login</h2>
+    <p>Home Assistant ingress remains trusted. This password only applies to direct access to the add-on port.</p>
+    {err_html}
+    <form method="post" action="{html.escape(_prefixed_path('/login'))}">
+      <input type="hidden" name="next" value="{html.escape(next_target)}">
+      <div class="row"><label>Password</label><div><input name="password" type="password" autocomplete="current-password"></div></div>
+      <div class="actions">
+        <button type="submit">Sign In</button>
+      </div>
+    </form>
+  </div>
+</div>
+"""
+        return page_html("ESP Host Bridge Login", body)
+
+    @app.post("/logout")
+    def logout() -> Any:
+        session.pop("webui_authenticated", None)
+        return redirect(_prefixed_path("/login"))
 
     @app.get("/")
     def index() -> str:
@@ -3236,6 +3352,12 @@ def create_app(
       <div class=\"row\"><label>Allow Host Commands</label><div><input name=\"allow_host_cmds\" type=\"checkbox\" {'checked' if cfg.get('allow_host_cmds') else ''}><div class=\"hint\">Lets the ESP request host actions like shutdown/restart. Leave off unless you need it.</div></div></div>
       <div class=\"row\"><label>Use sudo for Host Commands</label><div><input name=\"host_cmd_use_sudo\" type=\"checkbox\" {'checked' if cfg.get('host_cmd_use_sudo') else ''}><div class=\"hint\">{host_cmd_use_sudo_hint}</div></div></div>
             """
+        security_section = """
+      <details class=\"section\" data-section-key=\"direct_webui_security\"><summary><span class=\"section-icon\" aria-hidden=\"true\"><span class=\"mdi mdi-lock-outline\"></span></span>Direct Web UI Security</summary><div class=\"section-body\">
+      <div class=\"row\"><label>Protect Direct Web UI</label><div><input name=\"webui_auth_enabled\" type=\"checkbox\" {checked}><div class=\"hint\">Requires a password for direct access to the add-on port. Home Assistant ingress remains trusted.</div></div></div>
+      <div class=\"row\"><label>New Password</label><div><input name=\"webui_password\" type=\"password\" autocomplete=\"new-password\"><div class=\"hint\">Leave blank to keep the current password. Disable protection and save to remove it.</div></div></div>
+      </div></details>
+        """.format(checked='checked' if cfg.get('webui_auth_enabled') else '')
         workload_summary_label = "Add-on Summary" if homeassistant_mode else "Docker Summary"
         workload_summary_sub = "Run / Stop / Issue" if homeassistant_mode else "Run / Stop / Unhealthy"
         vm_summary_label = "Integration Summary" if homeassistant_mode else "VM Summary"
@@ -3303,6 +3425,7 @@ def create_app(
       <details class=\"section\" data-section-key=\"power_commands\"><summary><span class=\"section-icon\" aria-hidden=\"true\"><span class=\"mdi mdi-power\"></span></span>Power Commands</summary><div class=\"section-body\">
       {power_commands_body}
       </div></details>
+      {security_section}
       <div class=\"actions form-actions-sticky\">
         <button type=\"submit\">Save + Restart</button>
         <button class=\"secondary\" type=\"submit\" formaction=\"{html.escape(save_action)}?restart=0\">Save Only</button>
@@ -3726,11 +3849,30 @@ window.__HOST_METRICS_BOOT__ = {{
 
     @app.post("/save")
     def save() -> Any:
+        existing_cfg = load_cfg(cfg_path)
         cfg = cfg_from_form(request.form)
+        cfg["webui_session_secret"] = _clean_str(existing_cfg.get("webui_session_secret"), "")
+        cfg["webui_password_hash"] = _clean_str(existing_cfg.get("webui_password_hash"), "")
+
+        auth_enabled = _clean_bool(cfg.get("webui_auth_enabled"), False)
+        submitted_password = str(request.form.get("webui_password") or "").strip()
+        if auth_enabled:
+            if submitted_password:
+                if generate_password_hash is None:
+                    return _redir("Password hashing support is unavailable in this runtime.", key="err")
+                cfg["webui_password_hash"] = generate_password_hash(submitted_password)
+            elif not cfg["webui_password_hash"]:
+                return _redir("Set a password before enabling direct Web UI protection.", key="err")
+        else:
+            cfg["webui_password_hash"] = ""
+
+        cfg, secret_updated = ensure_webui_session_secret(cfg)
         ok, message = validate_cfg(cfg)
         if not ok:
             return _redir(message, key="err")
         atomic_write_json(cfg_path, cfg)
+        if secret_updated:
+            app.secret_key = str(cfg.get("webui_session_secret") or app.secret_key)
         restart = int(request.args.get("restart", "1"))
         if restart:
             ok_run, message_run = pub.restart(cfg)
@@ -3872,7 +4014,10 @@ window.__HOST_METRICS_BOOT__ = {{
     @app.post("/api/start")
     def api_start() -> Any:
         payload = request.get_json(silent=True) or {}
-        cfg = normalize_cfg(payload) if isinstance(payload, dict) and payload else load_cfg(cfg_path)
+        existing_cfg = load_cfg(cfg_path)
+        cfg = normalize_cfg(payload) if isinstance(payload, dict) and payload else existing_cfg
+        cfg["webui_session_secret"] = _clean_str(existing_cfg.get("webui_session_secret"), "")
+        cfg["webui_password_hash"] = _clean_str(existing_cfg.get("webui_password_hash"), "")
         ok_valid, msg_valid = validate_cfg(cfg)
         if not ok_valid:
             return jsonify({"ok": False, "message": msg_valid}), 400
@@ -3889,7 +4034,10 @@ window.__HOST_METRICS_BOOT__ = {{
     @app.post("/api/restart")
     def api_restart() -> Any:
         payload = request.get_json(silent=True) or {}
-        cfg = normalize_cfg(payload) if isinstance(payload, dict) and payload else load_cfg(cfg_path)
+        existing_cfg = load_cfg(cfg_path)
+        cfg = normalize_cfg(payload) if isinstance(payload, dict) and payload else existing_cfg
+        cfg["webui_session_secret"] = _clean_str(existing_cfg.get("webui_session_secret"), "")
+        cfg["webui_password_hash"] = _clean_str(existing_cfg.get("webui_password_hash"), "")
         ok_valid, msg_valid = validate_cfg(cfg)
         if not ok_valid:
             return jsonify({"ok": False, "message": msg_valid}), 400
@@ -3912,9 +4060,9 @@ window.__HOST_METRICS_BOOT__ = {{
         else:
             pub.log_event(f"[autostart skipped] {message}")
 
-    cfg_path.parent.mkdir(parents=True, exist_ok=True)
     if not cfg_path.exists():
-        atomic_write_json(cfg_path, webui_default_cfg())
+        cfg_seed, _ = ensure_webui_session_secret(webui_default_cfg())
+        atomic_write_json(cfg_path, cfg_seed)
     maybe_autostart()
     atexit.register(pub.stop_noexcept)
     return app

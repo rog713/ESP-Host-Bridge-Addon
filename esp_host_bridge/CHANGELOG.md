@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.03.22.5
+- Added basic password protection for direct Web UI access.
+- Trusts Home Assistant ingress and keeps `/api/status` open for add-on health checks.
+- Stores the direct Web UI password as a hash in the runtime config and generates a persistent session secret automatically.
+
 ## 2026.03.22.4
 - Disabled `full_access` to test whether the current add-on can run under the narrower Home Assistant permission model.
 - Kept `host_network`, `host_uts`, `udev`, `uart`, and AppArmor enabled so the hardening delta stays isolated.
