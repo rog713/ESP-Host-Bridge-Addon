@@ -16,8 +16,8 @@ This repository contains the Home Assistant add-on for `ESP Host Bridge`.
 - shows Home Assistant add-ons, integrations, and recent activity in the Web UI
 - reads local host metrics such as CPU, memory, network, and disk
 
-## Use it when
+## Best fit
 
 Use this add-on when Home Assistant, the ESP device, and the host resources you want to monitor are all on the same machine.
 
-If Home Assistant is running on a different machine than the ESP device or the monitored host, this add-on is the wrong fit.
+If Home Assistant is running on a different machine than the ESP device or the monitored host, use the regular Host Bridge install instead.
