@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.22.7
+
+- Updated the ESP preview layout and spacing.
+
 ## 2026.03.22.6
 
 - Removed the Home Assistant Configuration form.

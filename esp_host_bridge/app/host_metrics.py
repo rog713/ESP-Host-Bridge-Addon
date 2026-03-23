@@ -3538,7 +3538,7 @@ def create_app(
           <div class="esp-shell">
             <div class="esp-viewport" id="espPreviewViewport">
               <div class="esp-display-stage" id="espPreviewStage">
-                <div class="esp-screen home-mode" id="espPreviewScreen" tabindex="0" title="Swipe in the preview, click HOME quadrants, or use arrow keys to navigate">
+                <div class="esp-screen home-mode" id="espPreviewScreen" tabindex="0">
                   <div class="esp-top" id="espPreviewTop">
                     <div class="esp-top-title" id="espTopTitle">HOME</div>
                     <div class="esp-top-pills" id="espTopPills"></div>
@@ -3568,11 +3568,11 @@ def create_app(
                       <div class="esp-dualmetric-dot left"></div>
                       <div class="esp-dualmetric-lbl left">RX</div>
                       <div class="esp-dualmetric-val left" id="espNetRxVal">--</div>
-                      <div class="esp-dualmetric-unit" style="left:114px;">MB/s</div>
+                      <div class="esp-dualmetric-unit left">MB/s</div>
                       <div class="esp-dualmetric-dot right"></div>
                       <div class="esp-dualmetric-lbl right">TX</div>
                       <div class="esp-dualmetric-val right" id="espNetTxVal">--</div>
-                      <div class="esp-dualmetric-unit" style="left:290px;">MB/s</div>
+                      <div class="esp-dualmetric-unit right">MB/s</div>
                     </div>
                     <div class="esp-sys-chartbox">
                       <div id="espNetGraph"></div>
@@ -3589,11 +3589,11 @@ def create_app(
                       <div class="esp-sys-dot cpu"></div>
                       <div class="esp-sys-t" style="left:42px; top:12px;">CPU</div>
                       <div class="esp-sys-v" id="espSysCpuVal" style="left:42px; top:22px;">--</div>
-                      <div class="esp-sys-u" style="left:108px; top:42px;">%</div>
+                      <div class="esp-sys-u cpu">%</div>
                       <div class="esp-sys-dot mem"></div>
                       <div class="esp-sys-t" style="left:226px; top:12px;">MEMORY</div>
                       <div class="esp-sys-v mem" id="espSysMemVal" style="left:226px; top:22px;">--</div>
-                      <div class="esp-sys-u" style="left:282px; top:42px;">%</div>
+                      <div class="esp-sys-u mem">%</div>
                     </div>
                     <div class="esp-sys-chartbox">
                       <div id="espSysGraph"></div>
@@ -3632,7 +3632,7 @@ def create_app(
                       <div class="esp-metric-dot"></div>
                       <div class="esp-metric-title">CPU TEMP</div>
                       <div class="esp-metric-value" id="espCpuTempVal">--</div>
-                      <div class="esp-metric-unit" style="left:108px; top:42px;">°C</div>
+                      <div class="esp-metric-unit">°C</div>
                     </div>
                     <div class="esp-sys-chartbox">
                       <div id="espCpuTempGraph"></div>
@@ -3649,7 +3649,7 @@ def create_app(
                       <div class="esp-metric-dot violet"></div>
                       <div class="esp-metric-title">DISK TEMP</div>
                       <div class="esp-metric-value violet" id="espDiskTempVal">--</div>
-                      <div class="esp-metric-unit" style="left:108px; top:42px;">°C</div>
+                      <div class="esp-metric-unit">°C</div>
                     </div>
                     <div class="esp-sys-chartbox">
                       <div id="espDiskTempGraph"></div>
@@ -3666,7 +3666,7 @@ def create_app(
                       <div class="esp-metric-dot"></div>
                       <div class="esp-metric-title">DISK USAGE</div>
                       <div class="esp-metric-value" id="espDiskUsageVal">--</div>
-                      <div class="esp-metric-unit" style="left:108px; top:42px;">%</div>
+                      <div class="esp-metric-unit">%</div>
                     </div>
                     <div class="esp-sys-chartbox">
                       <div id="espDiskUsageGraph"></div>
@@ -3683,11 +3683,11 @@ def create_app(
                       <div class="esp-dualmetric-dot left"></div>
                       <div class="esp-dualmetric-lbl left">GPU</div>
                       <div class="esp-dualmetric-val left" id="espGpuUtilVal">--</div>
-                      <div class="esp-dualmetric-unit" style="left:114px;">%</div>
+                      <div class="esp-dualmetric-unit left">%</div>
                       <div class="esp-dualmetric-dot right"></div>
                       <div class="esp-dualmetric-lbl right">TEMP</div>
                       <div class="esp-dualmetric-val right" id="espGpuTempVal">--</div>
-                      <div class="esp-dualmetric-unit" style="left:290px;">°C</div>
+                      <div class="esp-dualmetric-unit right">°C</div>
                     </div>
                     <div class="esp-sys-chartbox">
                       <div id="espGpuGraph"></div>
