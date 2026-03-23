@@ -1496,9 +1496,10 @@ def pick_serial_port(requested: Optional[str], last_port: Optional[str] = None) 
             req_abs = req if req.startswith("/dev/") or re.match(r"^[A-Za-z]+\d+$", req) else f"/dev/{req}"
             req_real = _safe_realpath(req_abs)
             for p in available:
-                p_real = _safe_realpath(p)
-                if req == p or req_abs == p or req_real == p_real:
+                if req == p or req_abs == p:
                     return p
+            if os.path.exists(req_abs):
+                return req_abs
             if os.path.exists(req_abs):
                 for p in available:
                     if _safe_realpath(p) == req_real:

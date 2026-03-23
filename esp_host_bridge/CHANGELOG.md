@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.23.2
+
+- Prefer the configured serial device path over transient `/dev/ttyACM*` nodes.
+
 ## 2026.03.23.1
 
 - Added a display sleep status indicator to the Web UI.
