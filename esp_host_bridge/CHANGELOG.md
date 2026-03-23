@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.23.1
+
+- Added a display sleep status indicator to the Web UI.
+
 ## 2026.03.22.9
 
 - Refined the ESP preview layout and centering in the add-on Web UI.

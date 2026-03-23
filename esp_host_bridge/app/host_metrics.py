@@ -2569,6 +2569,7 @@ class RunnerManager:
         self._last_esp_boot_id: str = ""
         self._last_esp_boot_reason: str = ""
         self._last_esp_boot_line: str = ""
+        self._display_sleeping: Optional[bool] = None
         self._ha_activity: list[dict[str, Any]] = []
         self._ha_activity_enabled: bool = False
         self._ha_activity_api_ok: Optional[bool] = None
@@ -2589,6 +2590,8 @@ class RunnerManager:
             "failed to send power state to device",
             "usb_cdc",
             "esp=boot",
+            "display entered sleep",
+            "display woke",
         ]
         if any(m in ll for m in comm_markers):
             return True
@@ -2604,12 +2607,20 @@ class RunnerManager:
         self._last_comm_event_text = (line or "").strip()
         if "serial connected:" in ll:
             self._serial_connected = True
+            self._display_sleeping = False
             self._last_serial_reconnect_at = now_ts
+            return
+        if "display entered sleep" in ll:
+            self._display_sleeping = True
+            return
+        if "display woke" in ll:
+            self._display_sleeping = False
             return
         if "esp=boot" in ll:
             if self._serial_connected is not True:
                 self._last_serial_reconnect_at = now_ts
             self._serial_connected = True
+            self._display_sleeping = False
             return
         if "serial write failed" in ll or "serial open failed" in ll:
             self._serial_connected = False
@@ -2838,6 +2849,7 @@ class RunnerManager:
                     "last_boot_age_s": (time.time() - self._last_esp_boot_at) if self._last_esp_boot_at else None,
                     "last_boot_id": self._last_esp_boot_id,
                     "last_boot_reason": self._last_esp_boot_reason,
+                    "display_sleeping": self._display_sleeping,
                 },
                 "last_metrics_at": self._last_metrics_at,
                 "last_metrics_age_s": (time.time() - self._last_metrics_at) if self._last_metrics_at else None,
@@ -3493,6 +3505,7 @@ def create_app(
             <div class="status-pill" id="serialReconnects">Reconnects: 0</div>
             <div class="status-pill" id="serialEventAge">Comm: --</div>
             <div class="status-pill" id="espBootCount">ESP Boots: 0</div>
+            <div class="status-pill" id="displaySleepStatus">Display: --</div>
             <div class="status-pill" id="espBootAge">Last ESP Boot: --</div>
             <div class="status-pill" id="espBootReason">Last ESP Reset: --</div>
           </div>

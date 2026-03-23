@@ -292,6 +292,7 @@ async function pollStatus() {
     updateActiveIfaceStatus(s);
     updateHomeAssistantApiStatus(s);
     updateHomeAssistantSummary(s);
+    updateDisplaySleepStatus(s);
     updateEspBootHealth(s);
     updateMetricPreview(s.last_metrics || {});
     updateMonitorDashboard(s);
@@ -382,6 +383,24 @@ function updateHostNameStatus(s) {
   }
   el.classList.add('ok');
   el.textContent = `Host: ${host}`;
+}
+function updateDisplaySleepStatus(s) {
+  const el = document.getElementById('displaySleepStatus');
+  if (!el) return;
+  el.classList.remove('ok', 'warn', 'danger');
+  const es = (s && s.esp_status && typeof s.esp_status === 'object') ? s.esp_status : {};
+  const sleeping = es.display_sleeping;
+  if (sleeping === true) {
+    el.classList.add('warn');
+    el.textContent = 'Display: Sleeping';
+    return;
+  }
+  if (sleeping === false) {
+    el.classList.add('ok');
+    el.textContent = 'Display: Awake';
+    return;
+  }
+  el.textContent = 'Display: --';
 }
 function updateEspBootHealth(s) {
   const es = (s && s.esp_status && typeof s.esp_status === 'object') ? s.esp_status : {};
