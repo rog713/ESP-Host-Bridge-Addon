@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.03.22.8
+
+- Pause USB telemetry output while the display is asleep.
+- Resume output and send a fresh update when the display wakes.
+
 ## 2026.03.22.7
 
 - Updated the ESP preview layout and spacing.

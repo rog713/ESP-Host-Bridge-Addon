@@ -144,6 +144,8 @@ class RuntimeState:
     ha_addons_api_ok: Optional[bool] = None
     ha_integrations_api_ok: Optional[bool] = None
     ha_activity_api_ok: Optional[bool] = None
+    display_sleeping: bool = False
+    display_refresh_pending: bool = False
 
 
 def safe_float(v: Any, default: Optional[float] = 0.0) -> Optional[float]:
@@ -1838,9 +1840,31 @@ def command_to_power_state(cmd: str) -> Optional[str]:
     return None
 
 
+def handle_display_state_command(cmd: str, state: Optional[RuntimeState]) -> bool:
+    cmd_l = (cmd or "").strip().lower()
+    if cmd_l == "display_sleep":
+        if state is not None:
+            if not state.display_sleeping:
+                logging.info("display entered sleep; pausing USB telemetry output")
+            state.display_sleeping = True
+            state.display_refresh_pending = False
+        return True
+    if cmd_l == "display_wake":
+        if state is not None:
+            was_sleeping = state.display_sleeping
+            state.display_sleeping = False
+            state.display_refresh_pending = True
+            state.tx_frame_index = 0
+            if was_sleeping:
+                logging.info("display woke; resuming USB telemetry output")
+        return True
+    return False
+
+
 def process_usb_commands(
     ser: Any,
     rx_buf: str,
+    state: Optional[RuntimeState] = None,
     allow_host_cmds: bool = False,
     homeassistant_mode: bool = False,
     host_cmd_use_sudo: bool = False,
@@ -1875,6 +1899,8 @@ def process_usb_commands(
         if not line.startswith("CMD="):
             continue
         cmd = line.split("=", 1)[1].strip()
+        if handle_display_state_command(cmd, state):
+            continue
         if allow_host_cmds:
             if homeassistant_mode and execute_home_assistant_addon_command(cmd, timeout):
                 continue
@@ -2194,12 +2220,11 @@ def run_agent(args: argparse.Namespace) -> int:
                 else:
                     state.host_name_sent = False
             try:
-                line = build_status_line(args, state)
-                logging.info("%s", line.strip())
                 if ser is not None:
                     state.rx_buf = process_usb_commands(
                         ser,
                         state.rx_buf,
+                        state=state,
                         allow_host_cmds=args.allow_host_cmds,
                         homeassistant_mode=is_home_assistant_app_mode(),
                         host_cmd_use_sudo=args.host_cmd_use_sudo,
@@ -2210,13 +2235,19 @@ def run_agent(args: argparse.Namespace) -> int:
                         shutdown_cmd=args.shutdown_cmd,
                         restart_cmd=args.restart_cmd,
                     )
-                    if not state.host_name_sent and HOST_NAME_USB:
-                        ser.write(f"HOSTNAME={HOST_NAME_USB}\n".encode("utf-8", errors="ignore"))
-                        state.host_name_sent = True
-                    ser.write(line.encode("utf-8", errors="ignore"))
+                line = build_status_line(args, state)
+                logging.info("%s", line.strip())
+                if ser is not None:
+                    if not state.display_sleeping:
+                        if not state.host_name_sent and HOST_NAME_USB:
+                            ser.write(f"HOSTNAME={HOST_NAME_USB}\n".encode("utf-8", errors="ignore"))
+                            state.host_name_sent = True
+                        ser.write(line.encode("utf-8", errors="ignore"))
+                        state.display_refresh_pending = False
                     state.rx_buf = process_usb_commands(
                         ser,
                         state.rx_buf,
+                        state=state,
                         allow_host_cmds=args.allow_host_cmds,
                         homeassistant_mode=is_home_assistant_app_mode(),
                         host_cmd_use_sudo=args.host_cmd_use_sudo,
@@ -2227,6 +2258,14 @@ def run_agent(args: argparse.Namespace) -> int:
                         shutdown_cmd=args.shutdown_cmd,
                         restart_cmd=args.restart_cmd,
                     )
+                    if state.display_refresh_pending and not state.display_sleeping:
+                        line = build_status_line(args, state)
+                        logging.info("%s", line.strip())
+                        if not state.host_name_sent and HOST_NAME_USB:
+                            ser.write(f"HOSTNAME={HOST_NAME_USB}\n".encode("utf-8", errors="ignore"))
+                            state.host_name_sent = True
+                        ser.write(line.encode("utf-8", errors="ignore"))
+                        state.display_refresh_pending = False
             except (SerialException, OSError) as e:
                 logging.warning("serial write failed (%s), reconnecting...", e)
                 try:
