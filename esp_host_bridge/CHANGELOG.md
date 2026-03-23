@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.03.22.9
+
+- Refined the ESP preview layout and centering in the add-on Web UI.
+
 ## 2026.03.22.8
 
 - Pause USB telemetry output while the display is asleep.
