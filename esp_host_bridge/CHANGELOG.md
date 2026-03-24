@@ -1,3 +1,8 @@
+## 2026.03.24.1
+
+- Added a Host Bridge version pill to the Web UI.
+- Published the current bridge status UI updates.
+
 # Changelog
 
 ## 2026.03.23.2

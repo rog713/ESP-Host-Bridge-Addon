@@ -402,6 +402,46 @@ function updateDisplaySleepStatus(s) {
   }
   el.textContent = 'Display: --';
 }
+function updateEspWifiStatus(s) {
+  const es = (s && s.esp_status && typeof s.esp_status === 'object') ? s.esp_status : {};
+  const statusEl = document.getElementById('espWifiStatus');
+  const detailEl = document.getElementById('espWifiDetail');
+  const state = String(es.wifi_state || '').trim().toUpperCase();
+  const ssid = String(es.wifi_ssid || '').trim();
+  const ip = String(es.wifi_ip || '').trim();
+  const rssi = Number(es.wifi_rssi_dbm);
+  const age = Number(es.wifi_age_s);
+  if (statusEl) {
+    statusEl.classList.remove('ok', 'warn', 'danger');
+    if (state === 'CONNECTED') {
+      statusEl.classList.add('ok');
+      statusEl.textContent = 'ESP Wi-Fi: Connected';
+    } else if (state === 'DISCONNECTED') {
+      statusEl.classList.add('danger');
+      statusEl.textContent = 'ESP Wi-Fi: Disconnected';
+    } else {
+      statusEl.textContent = 'ESP Wi-Fi: --';
+    }
+  }
+  if (detailEl) {
+    detailEl.classList.remove('ok', 'warn', 'danger');
+    if (state === 'CONNECTED') {
+      const parts = [];
+      if (ssid) parts.push(ssid);
+      if (ip) parts.push(ip);
+      if (Number.isFinite(rssi)) parts.push(`${Math.round(rssi)} dBm`);
+      detailEl.classList.add('ok');
+      detailEl.textContent = `ESP Wi-Fi Detail: ${parts.length ? parts.join(' • ') : 'Connected'}`;
+      return;
+    }
+    if (state === 'DISCONNECTED') {
+      detailEl.classList.add('danger');
+      detailEl.textContent = `ESP Wi-Fi Detail: ${Number.isFinite(age) ? `Last update ${fmtAgeSec(age)}` : 'Disconnected'}`;
+      return;
+    }
+    detailEl.textContent = 'ESP Wi-Fi Detail: --';
+  }
+}
 function updateEspBootHealth(s) {
   const es = (s && s.esp_status && typeof s.esp_status === 'object') ? s.esp_status : {};
   const countEl = document.getElementById('espBootCount');

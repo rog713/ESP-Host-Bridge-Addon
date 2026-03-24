@@ -57,6 +57,7 @@ except Exception:
     generate_password_hash = None  # type: ignore[assignment]
 
 SERIAL_RETRY_SECONDS = 2
+SLEEP_SERIAL_PROBE_SECONDS = 3.0
 RX_BUFFER_MAX_BYTES = 4096
 RX_BUFFER_KEEP_BYTES = 1024
 DISK_TEMP_REFRESH_SECONDS = 15.0
@@ -97,6 +98,51 @@ GENERIC_HOME_ASSISTANT_ACRONYMS = {
 _mdi_codepoint_map_lock = threading.Lock()
 _mdi_codepoint_map_cache: Optional[Dict[str, int]] = None
 _mdi_codepoint_map_cache_err: Optional[str] = None
+
+
+def _detect_app_version() -> str:
+    env_version = str(os.environ.get("ESP_HOST_BRIDGE_VERSION", "") or "").strip()
+    if env_version:
+        return env_version
+    try:
+        from importlib import metadata as importlib_metadata
+
+        version = str(importlib_metadata.version("esp-host-bridge") or "").strip()
+        if version:
+            return version
+    except Exception:
+        pass
+    seen: set[Path] = set()
+    current = Path(__file__).resolve()
+    for ancestor in (current.parent, *current.parents):
+        for candidate in (
+            ancestor / "config.yaml",
+            ancestor / "pyproject.toml",
+            ancestor / "esp-host-bridge.plg",
+            ancestor / "dist" / "esp-host-bridge.plg",
+        ):
+            if candidate in seen or not candidate.is_file():
+                continue
+            seen.add(candidate)
+            try:
+                raw = candidate.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            for pattern in (
+                r'(?m)^version\s*=\s*"([^"\n]+)"\s*$',
+                r'(?m)^version:\s*"?(.*?)"?\s*$',
+                r'\bversion="([^"]+)"',
+            ):
+                match = re.search(pattern, raw)
+                if not match:
+                    continue
+                version = str(match.group(1) or "").strip()
+                if version:
+                    return version
+    return "dev"
+
+
+APP_VERSION = _detect_app_version()
 
 
 @dataclass
@@ -1748,10 +1794,10 @@ def execute_docker_command(cmd: str, socket_path: str, timeout: float) -> bool:
 def execute_home_assistant_addon_command(cmd: str, timeout: float) -> bool:
     cmd_s = (cmd or "").strip()
     cmd_l = cmd_s.lower()
-    if cmd_l.startswith("docker_start:"):
+    if cmd_l.startswith("docker_start:") or cmd_l.startswith("addons_start:"):
         action = "start"
         target = cmd_s.split(":", 1)[1].strip()
-    elif cmd_l.startswith("docker_stop:"):
+    elif cmd_l.startswith("docker_stop:") or cmd_l.startswith("addons_stop:"):
         action = "stop"
         target = cmd_s.split(":", 1)[1].strip()
     else:
@@ -2193,7 +2239,7 @@ def agent_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--allow-host-cmds",
         action="store_true",
-        help="Execute host actions from USB CDC commands (shutdown/restart/docker_start/docker_stop/vm_start/vm_stop/vm_force_stop/vm_restart)",
+        help="Execute host actions from USB CDC commands (shutdown/restart/docker_start/docker_stop/addons_start/addons_stop/vm_start/vm_stop/vm_force_stop/vm_restart)",
     )
     ap.add_argument(
         "--host-cmd-use-sudo",
@@ -2211,6 +2257,7 @@ def run_agent(args: argparse.Namespace) -> int:
     state = RuntimeState()
     ser = None
     next_serial_retry_at = 0.0
+    next_sleep_probe_at = 0.0
     try:
         while True:
             now = time.time()
@@ -2220,6 +2267,9 @@ def run_agent(args: argparse.Namespace) -> int:
                     next_serial_retry_at = now + SERIAL_RETRY_SECONDS
                 else:
                     state.host_name_sent = False
+                    state.display_sleeping = False
+                    state.display_refresh_pending = True
+                    state.tx_frame_index = 0
             try:
                 if ser is not None:
                     state.rx_buf = process_usb_commands(
@@ -2240,11 +2290,16 @@ def run_agent(args: argparse.Namespace) -> int:
                 logging.info("%s", line.strip())
                 if ser is not None:
                     if not state.display_sleeping:
+                        next_sleep_probe_at = 0.0
                         if not state.host_name_sent and HOST_NAME_USB:
                             ser.write(f"HOSTNAME={HOST_NAME_USB}\n".encode("utf-8", errors="ignore"))
                             state.host_name_sent = True
                         ser.write(line.encode("utf-8", errors="ignore"))
                         state.display_refresh_pending = False
+                    elif now >= next_sleep_probe_at:
+                        ser.write(b"\n")
+                        ser.flush()
+                        next_sleep_probe_at = now + SLEEP_SERIAL_PROBE_SECONDS
                     state.rx_buf = process_usb_commands(
                         ser,
                         state.rx_buf,
@@ -2276,6 +2331,7 @@ def run_agent(args: argparse.Namespace) -> int:
                 ser = None
                 state.rx_buf = ""
                 next_serial_retry_at = time.time() + SERIAL_RETRY_SECONDS
+                next_sleep_probe_at = 0.0
             except Exception as e:
                 logging.warning("%s", e)
             time.sleep(args.interval)
@@ -2571,6 +2627,11 @@ class RunnerManager:
         self._last_esp_boot_reason: str = ""
         self._last_esp_boot_line: str = ""
         self._display_sleeping: Optional[bool] = None
+        self._last_esp_wifi_at: Optional[float] = None
+        self._esp_wifi_state: str = ""
+        self._esp_wifi_rssi_dbm: Optional[int] = None
+        self._esp_wifi_ip: str = ""
+        self._esp_wifi_ssid: str = ""
         self._ha_activity: list[dict[str, Any]] = []
         self._ha_activity_enabled: bool = False
         self._ha_activity_api_ok: Optional[bool] = None
@@ -2696,11 +2757,58 @@ class RunnerManager:
             self._last_esp_boot_reason = boot_reason
             self._last_esp_boot_line = raw
 
+    def _try_capture_esp_wifi(self, line: str) -> None:
+        raw = (line or "").strip()
+        marker = "ESP=WIFI"
+        pos = raw.find(marker)
+        if pos < 0:
+            return
+        payload = raw[pos:]
+        parts: Dict[str, str] = {}
+        for part in payload.split(","):
+            if "=" not in part:
+                continue
+            k, v = part.split("=", 1)
+            key = k.strip().upper()
+            val = v.strip()
+            if key:
+                parts[key] = val
+        if parts.get("ESP", "").strip().upper() != "WIFI":
+            return
+        state = str(parts.get("STATE", "") or "").strip().upper()
+        rssi_val = str(parts.get("RSSI", "") or "").strip()
+        ip = str(parts.get("IP", "") or "").strip()
+        ssid = str(parts.get("SSID", "") or "").strip()
+        rssi: Optional[int] = None
+        if rssi_val:
+            try:
+                rssi = int(float(rssi_val))
+            except Exception:
+                rssi = None
+        now_ts = time.time()
+        with self._lock:
+            self._last_esp_wifi_at = now_ts
+            self._esp_wifi_state = state
+            if state == "CONNECTED":
+                self._esp_wifi_rssi_dbm = rssi
+                self._esp_wifi_ip = ip
+                self._esp_wifi_ssid = ssid
+            else:
+                self._esp_wifi_rssi_dbm = None
+                self._esp_wifi_ip = ""
+                self._esp_wifi_ssid = ""
+
     def _append_log(self, line: str) -> None:
-        if not line.endswith("\n"):
-            line += "\n"
+        raw = line.rstrip("\n")
+        if not raw:
+            line = "\n"
+        elif re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\s", raw):
+            line = raw + "\n"
+        else:
+            line = f"{fmt_ts(time.time())} {raw}\n"
         self._try_capture_metrics(line)
         self._try_capture_esp_boot(line)
+        self._try_capture_esp_wifi(line)
         with self._lock:
             self._logs.append((self._next_log_id, line))
             self._next_log_id += 1
@@ -2813,6 +2921,7 @@ class RunnerManager:
                     latest_activity_age_s = max(0.0, time.time() - latest_ts)
             return {
                 "host_name": HOST_NAME or None,
+                "bridge_version": APP_VERSION,
                 "platform_mode": "homeassistant" if is_home_assistant_app_mode() else "host",
                 "ha_status": {
                     "token_present": bool(SUPERVISOR_TOKEN),
@@ -2851,6 +2960,11 @@ class RunnerManager:
                     "last_boot_id": self._last_esp_boot_id,
                     "last_boot_reason": self._last_esp_boot_reason,
                     "display_sleeping": self._display_sleeping,
+                    "wifi_state": self._esp_wifi_state,
+                    "wifi_rssi_dbm": self._esp_wifi_rssi_dbm,
+                    "wifi_ip": self._esp_wifi_ip,
+                    "wifi_ssid": self._esp_wifi_ssid,
+                    "wifi_age_s": (time.time() - self._last_esp_wifi_at) if self._last_esp_wifi_at else None,
                 },
                 "last_metrics_at": self._last_metrics_at,
                 "last_metrics_age_s": (time.time() - self._last_metrics_at) if self._last_metrics_at else None,
@@ -2996,6 +3110,7 @@ def page_html(title: str, body: str) -> str:
         </div>
       </div>
       <div class="topbar-actions">
+        <div class="status-pill">Version: {html.escape(APP_VERSION)}</div>
         {mode_toggle_html}
       </div>
     </div>
@@ -3507,6 +3622,8 @@ def create_app(
             <div class="status-pill" id="serialEventAge">Comm: --</div>
             <div class="status-pill" id="espBootCount">ESP Boots: 0</div>
             <div class="status-pill" id="displaySleepStatus">Display: --</div>
+            <div class="status-pill" id="espWifiStatus">ESP Wi-Fi: --</div>
+            <div class="status-pill" id="espWifiDetail">ESP Wi-Fi Detail: --</div>
             <div class="status-pill" id="espBootAge">Last ESP Boot: --</div>
             <div class="status-pill" id="espBootReason">Last ESP Reset: --</div>
           </div>
