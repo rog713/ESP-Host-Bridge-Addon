@@ -293,6 +293,7 @@ async function pollStatus() {
     updateHomeAssistantApiStatus(s);
     updateHomeAssistantSummary(s);
     updateDisplaySleepStatus(s);
+    updateEspWifiStatus(s);
     updateEspBootHealth(s);
     updateMetricPreview(s.last_metrics || {});
     updateMonitorDashboard(s);
