@@ -21,6 +21,7 @@ RUN apk add --no-cache \
 WORKDIR /opt/esp-host-bridge
 
 COPY app/ /opt/esp-host-bridge/app/
+COPY config.yaml /opt/esp-host-bridge/config.yaml
 COPY start_addon.py /opt/esp-host-bridge/start_addon.py
 COPY run.sh /run.sh
 
