@@ -1,3 +1,8 @@
+## 2026.03.25.1
+
+- Fixed add-on version detection by copying `config.yaml` into the runtime image.
+- Fixed the Web UI so parsed ESP Wi-Fi status now updates the visible status pills.
+
 ## 2026.03.24.1
 
 - Added a Host Bridge version pill to the Web UI.
