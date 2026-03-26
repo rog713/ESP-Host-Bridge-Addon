@@ -1,3 +1,7 @@
+## 2026.03.26.1
+
+- Improved the Bridge Status layout so it scales cleanly on smaller screens.
+
 ## 2026.03.25.1
 
 - Fixed add-on version detection by copying `config.yaml` into the runtime image.
