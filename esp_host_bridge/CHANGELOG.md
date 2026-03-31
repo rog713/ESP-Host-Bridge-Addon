@@ -1,3 +1,8 @@
+## 2026.03.31.6
+
+- Fixed add-on version reporting so the Web UI uses the add-on version instead of the vendored core package version.
+- Added static asset cache busting for Home Assistant ingress so updated CSS and JS load after add-on upgrades.
+
 ## 2026.03.31.5
 
 - Fixed Home Assistant ingress asset and API URLs so the add-on Web UI styles and scripts load under ingress correctly.

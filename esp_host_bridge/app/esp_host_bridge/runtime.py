@@ -77,6 +77,21 @@ _mdi_codepoint_map_cache: Optional[Dict[str, int]] = None
 _mdi_codepoint_map_cache_err: Optional[str] = None
 
 
+def _extract_version_from_text(raw: str) -> str:
+    for pattern in (
+        r'(?m)^version\s*=\s*"([^"\n]+)"\s*$',
+        r'(?m)^version:\s*"?(.*?)"?\s*$',
+        r'\bversion="([^"]+)"',
+    ):
+        match = re.search(pattern, raw)
+        if not match:
+            continue
+        version = str(match.group(1) or "").strip()
+        if version:
+            return version
+    return ""
+
+
 def _detect_app_version() -> str:
     env_version = str(os.environ.get("ESP_HOST_BRIDGE_VERSION", "") or "").strip()
     if env_version:
@@ -91,13 +106,15 @@ def _detect_app_version() -> str:
         pass
     seen: set[Path] = set()
     current = Path(__file__).resolve()
-    for ancestor in (current.parent, *current.parents):
-        for candidate in (
-            ancestor / "config.yaml",
-            ancestor / "pyproject.toml",
-            ancestor / "esp-host-bridge.plg",
-            ancestor / "dist" / "esp-host-bridge.plg",
-        ):
+    ancestors = (current.parent, *current.parents)
+    for relative_candidate in (
+        Path("config.yaml"),
+        Path("pyproject.toml"),
+        Path("esp-host-bridge.plg"),
+        Path("dist") / "esp-host-bridge.plg",
+    ):
+        for ancestor in ancestors:
+            candidate = ancestor / relative_candidate
             if candidate in seen or not candidate.is_file():
                 continue
             seen.add(candidate)
@@ -105,17 +122,9 @@ def _detect_app_version() -> str:
                 raw = candidate.read_text(encoding="utf-8", errors="ignore")
             except Exception:
                 continue
-            for pattern in (
-                r'(?m)^version\s*=\s*"([^"\n]+)"\s*$',
-                r'(?m)^version:\s*"?(.*?)"?\s*$',
-                r'\bversion="([^"]+)"',
-            ):
-                match = re.search(pattern, raw)
-                if not match:
-                    continue
-                version = str(match.group(1) or "").strip()
-                if version:
-                    return version
+            version = _extract_version_from_text(raw)
+            if version:
+                return version
     return "dev"
 
 

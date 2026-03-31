@@ -515,7 +515,7 @@ def _render_preview_action_footnote(groups: list[dict[str, Any]], target: str) -
 def page_html(title: str, body: str) -> str:
     mode_toggle_html = _render_mode_toggle_html()
     topbar_subtitle = _render_topbar_subtitle()
-    host_ui_css_url = url_for("host_static_asset", asset_name="host_ui.css")
+    host_ui_css_url = url_for("host_static_asset", asset_name="host_ui.css", v=APP_VERSION)
     return f"""<!doctype html>
 <html>
 <head>
@@ -762,7 +762,7 @@ def create_app(
             error = "Incorrect password."
 
         err_html = f'<div class="err">{html.escape(error)}</div>' if error else ""
-        host_ui_css_url = url_for("host_static_asset", asset_name="host_ui.css")
+        host_ui_css_url = url_for("host_static_asset", asset_name="host_ui.css", v=APP_VERSION)
         login_action = url_for("login")
         return f"""<!doctype html>
 <html lang="en">
@@ -815,7 +815,7 @@ def create_app(
         restart_action = url_for("restart_proc")
         stop_action = url_for("stop_proc")
         index_action = url_for("index")
-        host_ui_js_url = url_for("host_static_asset", asset_name="host_ui.js")
+        host_ui_js_url = url_for("host_static_asset", asset_name="host_ui.js", v=APP_VERSION)
         summary_bar = st.get("summary_bar") or []
         preview_cards = st.get("preview_cards") or []
         preview_ui = st.get("preview_ui") or {}
