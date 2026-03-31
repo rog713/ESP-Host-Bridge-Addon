@@ -1,11 +1,12 @@
-## 2026.03.26.1
+## 2026.03.31.4
 
-- Improved the Bridge Status layout so it scales cleanly on smaller screens.
+- Rebuilt the Home Assistant add-on from the refactored `esp_host_bridge` core.
+- Switched the add-on payload to vendor the maintained package layout instead of the old `host_metrics.py` snapshot.
 
-## 2026.03.25.1
+## 2026.03.31.3
 
-- Fixed add-on version detection by copying `config.yaml` into the runtime image.
-- Fixed the Web UI so parsed ESP Wi-Fi status now updates the visible status pills.
+- Moved the add-on source into the maintained `ESP-Host-Bridge` repo layout.
+- Vendor the current `esp_host_bridge` package into the add-on build context instead of the old `host_metrics.py` snapshot.
 
 ## 2026.03.24.1
 

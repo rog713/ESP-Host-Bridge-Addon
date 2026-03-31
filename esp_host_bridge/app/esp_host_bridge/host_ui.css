@@ -270,6 +270,8 @@
     .summary-chip .k { font-size:11px; color: var(--muted); }
     .summary-chip .v { font-size:15px; font-weight:700; margin-top:2px; overflow-wrap:anywhere; }
     .monitor-grid { display:grid; gap:12px; grid-template-columns: repeat(12, minmax(0,1fr)); }
+    #monitorDashboardSections,
+    #monitorDetailSections { display: contents; }
     .mgroup { grid-column: span 12; border:1px solid var(--border); border-radius:14px; background: rgba(255,255,255,0.02); padding:12px; }
     .mgroup h3 { margin:0 0 10px; font-size:13px; letter-spacing:.2px; color:var(--muted); }
     .mgroup h3 .gicon { display:inline-flex; width:20px; height:20px; align-items:center; justify-content:center; margin-right:6px; border-radius:8px; border:1px solid rgba(255,255,255,0.07); background: rgba(255,255,255,0.03); color: var(--accent-2); font-size:11px; vertical-align:middle; }
@@ -295,18 +297,34 @@
     .docker-pill.down { color:#fecaca; border-color: rgba(239,68,68,0.22); background: rgba(239,68,68,0.08); }
     .docker-pill.running { color:#bbf7d0; border-color: rgba(34,197,94,0.25); background: rgba(34,197,94,0.08); }
     .docker-pill.paused { color:#fde68a; border-color: rgba(245,158,11,0.25); background: rgba(245,158,11,0.08); }
-    .activity-list { margin:10px 0 0; padding:0; list-style:none; display:grid; gap:8px; }
-    .activity-item { border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:10px 12px; background: rgba(255,255,255,0.02); display:grid; gap:4px; }
-    .activity-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
-    .activity-name { font-size:13px; font-weight:700; color: var(--text); min-width:0; overflow-wrap:anywhere; }
-    .activity-time { flex:0 0 auto; color: var(--accent-2); font-size:11px; white-space:nowrap; }
-    .activity-message { color: var(--text); font-size:13px; line-height:1.45; overflow-wrap:anywhere; }
-    .activity-meta { color: var(--muted); font-size:11px; line-height:1.35; overflow-wrap:anywhere; }
-    .activity-empty { margin-top:10px; padding:12px; border:1px dashed rgba(255,255,255,0.10); border-radius:12px; background: rgba(255,255,255,0.02); color: var(--muted); font-size:12px; line-height:1.45; }
     .docker-pill.stopped { color:#fecaca; border-color: rgba(239,68,68,0.22); background: rgba(239,68,68,0.08); }
     .docker-pill.other { color:#dbeafe; border-color: rgba(96,165,250,0.22); background: rgba(96,165,250,0.08); }
     .docker-card-wide { grid-column: span 2; }
     .monitor-note { color:var(--muted); font-size:12px; }
+    .integration-dashboard-cards { display:grid; gap:8px; margin-top:8px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+    .integration-dashboard-card { border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:10px; background: rgba(255,255,255,0.02); display:grid; gap:6px; }
+    .integration-dashboard-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .integration-dashboard-title { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; color: var(--text); }
+    .integration-dashboard-title .mdi { font-size:16px; color: var(--text); }
+    .integration-dashboard-meta { font-size:12px; color: var(--muted); overflow-wrap:anywhere; }
+    .integration-health-chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    .integration-health-list,
+    .command-registry-list { display:grid; gap:8px; margin-top:8px; }
+    .integration-health-row,
+    .command-registry-group { border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:10px; background: rgba(255,255,255,0.02); display:grid; gap:6px; }
+    .integration-health-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .integration-health-title,
+    .command-registry-owner { font-size:13px; font-weight:700; color: var(--text); }
+    .command-registry-owner { display:flex; align-items:center; gap:8px; }
+    .integration-health-meta,
+    .command-registry-meta { font-size:12px; color: var(--muted); overflow-wrap:anywhere; }
+    .integration-health-error { font-size:12px; color: #fca5a5; overflow-wrap:anywhere; }
+    .integration-health-tags { display:flex; flex-wrap:wrap; gap:6px; }
+    .integration-health-tags span,
+    .command-registry-flag { display:inline-flex; align-items:center; padding:3px 8px; border-radius:999px; border:1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03); color: var(--muted); font-size:11px; }
+    .command-registry-flag { color:#fcd34d; border-color: rgba(245,158,11,0.24); background: rgba(245,158,11,0.08); margin-left:6px; }
+    .command-registry-row { display:grid; gap:2px; }
+    .command-registry-title { font-size:12px; font-weight:700; color: var(--text); overflow-wrap:anywhere; }
     .esp-preview-wrap { display:grid; gap:10px; grid-template-columns: 1fr; }
     .esp-preview-wrap {
       --esp-bg: #001F67;
@@ -559,7 +577,6 @@
     .esp-metric-page,
     .esp-uptime-page,
     .esp-hostname-page,
-    .esp-activity-page,
     .esp-settings1-page,
     .esp-power-exact,
     .esp-workload-page {
@@ -572,8 +589,7 @@
     .esp-sys-card,
     .esp-metric-card,
     .esp-uptime-card,
-    .esp-hostname-card,
-    .esp-activity-card {
+    .esp-hostname-card {
       position: absolute;
       left: 35px;
       top: 8px;
@@ -681,6 +697,17 @@
       border-radius: 999px;
       background: rgba(11,30,74,0.80);
     }
+    .esp-sys-scale {
+      position:absolute;
+      left: 8px;
+      top: 8px;
+      color: #D1D5DB;
+      font-size: 14px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(11,30,74,0.80);
+      font-variant-numeric: tabular-nums;
+    }
     .esp-sys-loading { display: none !important; }
     .esp-sys-loading.is-empty,
     .esp-uptime-status.is-empty { color: #F9A8D4; }
@@ -741,83 +768,6 @@
       color: #9CA3AF;
       font-size: 28px;
       font-weight: 600;
-    }
-    .esp-activity-card {
-      padding: 16px 18px 14px;
-      display: grid;
-      gap: 10px;
-    }
-    .esp-activity-empty {
-      align-self: center;
-      justify-self: center;
-      max-width: 300px;
-      text-align: center;
-      color: #9CA3AF;
-      font-size: 15px;
-      line-height: 1.35;
-    }
-    .esp-activity-empty[hidden] { display:none; }
-    .esp-activity-rows {
-      display: grid;
-      gap: 8px;
-      align-content: start;
-    }
-    .esp-activity-row {
-      min-height: 40px;
-      padding: 8px 12px 7px;
-      border-radius: 12px;
-      border: 1px solid rgba(45,88,188,0.45);
-      background: rgba(255,255,255,0.03);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
-      display: grid;
-      gap: 4px;
-    }
-    .esp-activity-top,
-    .esp-activity-bottom {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: center;
-      gap: 8px;
-    }
-    .esp-activity-name {
-      color: #E0F2FE;
-      font-size: 14px;
-      font-weight: 700;
-      line-height: 1.15;
-      min-width: 0;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .esp-activity-source {
-      min-width: 0;
-      padding: 1px 8px 0;
-      border-radius: 999px;
-      border: 1px solid rgba(103,232,249,0.30);
-      background: rgba(14,116,144,0.22);
-      color: #A5F3FC;
-      font-size: 11px;
-      font-weight: 700;
-      line-height: 1.5;
-      letter-spacing: 0.03em;
-      text-transform: lowercase;
-      white-space: nowrap;
-    }
-    .esp-activity-detail {
-      color: #9CA3AF;
-      font-size: 12px;
-      line-height: 1.2;
-      min-width: 0;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .esp-activity-age {
-      color: #D1D5DB;
-      font-size: 12px;
-      line-height: 1.2;
-      text-align: right;
-      white-space: nowrap;
     }
     .esp-settings1-label {
       position: absolute;

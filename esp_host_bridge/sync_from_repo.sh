@@ -1,17 +1,18 @@
 #!/bin/sh
 set -eu
 
-ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)
-SRC_DIR="$ROOT_DIR/host_metrics"
-DST_DIR="$ROOT_DIR/host_metrics/homeassistant_repo/esp_host_bridge/app"
+ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+SRC_DIR="$ROOT_DIR"
+DST_DIR="$ROOT_DIR/homeassistant_addon/esp_host_bridge/app"
 
+rm -rf "$DST_DIR"
 mkdir -p "$DST_DIR"
 
-cp "$SRC_DIR/host_metrics.py" "$DST_DIR/host_metrics.py"
-cp "$SRC_DIR/host_metrics_ui_assets.py" "$DST_DIR/host_metrics_ui_assets.py"
-cp "$SRC_DIR/host_metrics_webui_templates.py" "$DST_DIR/host_metrics_webui_templates.py"
-cp "$SRC_DIR/host_ui.js" "$DST_DIR/host_ui.js"
-cp "$SRC_DIR/host_ui.css" "$DST_DIR/host_ui.css"
-cp "$SRC_DIR/requirements.txt" "$DST_DIR/requirements.txt"
+cp "$SRC_DIR/pyproject.toml" "$DST_DIR/pyproject.toml"
+cp "$SRC_DIR/README.md" "$DST_DIR/README.md"
+rsync -a \
+  --exclude='__pycache__' \
+  --exclude='*.pyc' \
+  "$SRC_DIR/esp_host_bridge/" "$DST_DIR/esp_host_bridge/"
 
-echo "Synced Host Bridge runtime files into the Home Assistant app repository context."
+echo "Synced esp_host_bridge package into Home Assistant add-on context."

@@ -1,6 +1,0 @@
-# Install: pip install -r host_metrics/requirements.txt
-Flask>=3.0
-pyserial>=3.5
-psutil>=5.9
-PyYAML>=6.0
-websockets>=12.0
