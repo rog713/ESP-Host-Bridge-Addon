@@ -1,3 +1,8 @@
+## 2026.03.31.7
+
+- Honored the Home Assistant `X-Ingress-Path` header when building Web UI routes, so ingress-prefixed CSS, JS, forms, and API URLs render correctly behind the Supervisor proxy.
+- Inlined the Host Bridge CSS and JS in Home Assistant mode so ingress no longer depends on separate `/static/host/*` asset requests.
+
 ## 2026.03.31.6
 
 - Fixed add-on version reporting so the Web UI uses the add-on version instead of the vendored core package version.

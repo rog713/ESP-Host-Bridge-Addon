@@ -57,6 +57,38 @@ from .runtime import (
     RunnerManager,
 )
 from .serial import list_serial_port_choices, test_serial_open
+from .ui_assets import load_host_ui_css, load_host_ui_js
+
+
+def _normalize_ingress_prefix(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if not text.startswith("/"):
+        text = "/" + text
+    return text.rstrip("/") or "/"
+
+
+def _apply_ingress_script_name_middleware(app: Any) -> None:
+    original_wsgi_app = app.wsgi_app
+
+    def ingress_wsgi_app(environ: dict[str, Any], start_response: Any) -> Any:
+        prefix = _normalize_ingress_prefix(
+            str(
+                environ.get("HTTP_X_INGRESS_PATH")
+                or environ.get("HTTP_X_FORWARDED_PREFIX")
+                or ""
+            )
+        )
+        if prefix and prefix != "/":
+            environ["SCRIPT_NAME"] = prefix
+            path_info = str(environ.get("PATH_INFO") or "")
+            if path_info.startswith(prefix):
+                trimmed = path_info[len(prefix):] or "/"
+                environ["PATH_INFO"] = trimmed if trimmed.startswith("/") else f"/{trimmed}"
+        return original_wsgi_app(environ, start_response)
+
+    app.wsgi_app = ingress_wsgi_app
 
 
 def _redir(value: str, key: str = "msg"):
@@ -515,7 +547,11 @@ def _render_preview_action_footnote(groups: list[dict[str, Any]], target: str) -
 def page_html(title: str, body: str) -> str:
     mode_toggle_html = _render_mode_toggle_html()
     topbar_subtitle = _render_topbar_subtitle()
-    host_ui_css_url = url_for("host_static_asset", asset_name="host_ui.css", v=APP_VERSION)
+    if is_home_assistant_app_mode():
+        host_ui_css_tag = f"<style>{load_host_ui_css()}</style>"
+    else:
+        host_ui_css_url = url_for("host_static_asset", asset_name="host_ui.css", v=APP_VERSION)
+        host_ui_css_tag = f'<link rel="stylesheet" href="{html.escape(host_ui_css_url)}">'
     return f"""<!doctype html>
 <html>
 <head>
@@ -527,7 +563,7 @@ def page_html(title: str, body: str) -> str:
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,0&display=swap">
   <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-  <link rel="stylesheet" href="{html.escape(host_ui_css_url)}">
+  {host_ui_css_tag}
 </head>
 <body>
   <div class="shell">
@@ -678,6 +714,7 @@ def create_app(
         raise RuntimeError("Flask is required for webui mode. Install with: pip install flask") from e
 
     app = Flask(__name__, static_folder=None)
+    _apply_ingress_script_name_middleware(app)
     cfg_path, cfg_migrated, cfg_migrated_from = migrate_legacy_webui_config(default_webui_config_path())
     def _env_flag(name: str, default: bool) -> bool:
         raw = os.environ.get(name)
@@ -762,7 +799,11 @@ def create_app(
             error = "Incorrect password."
 
         err_html = f'<div class="err">{html.escape(error)}</div>' if error else ""
-        host_ui_css_url = url_for("host_static_asset", asset_name="host_ui.css", v=APP_VERSION)
+        if homeassistant_mode:
+            host_ui_css_tag = f"<style>{load_host_ui_css()}</style>"
+        else:
+            host_ui_css_url = url_for("host_static_asset", asset_name="host_ui.css", v=APP_VERSION)
+            host_ui_css_tag = f'<link rel="stylesheet" href="{html.escape(host_ui_css_url)}">'
         login_action = url_for("login")
         return f"""<!doctype html>
 <html lang="en">
@@ -770,7 +811,7 @@ def create_app(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>ESP Host Bridge Login</title>
-  <link rel="stylesheet" href="{html.escape(host_ui_css_url)}">
+  {host_ui_css_tag}
 </head>
 <body>
   <div class="shell" style="max-width:520px;">
@@ -815,7 +856,11 @@ def create_app(
         restart_action = url_for("restart_proc")
         stop_action = url_for("stop_proc")
         index_action = url_for("index")
-        host_ui_js_url = url_for("host_static_asset", asset_name="host_ui.js", v=APP_VERSION)
+        if homeassistant_mode:
+            host_ui_js_tag = f"<script>{load_host_ui_js()}</script>"
+        else:
+            host_ui_js_url = url_for("host_static_asset", asset_name="host_ui.js", v=APP_VERSION)
+            host_ui_js_tag = f'<script src="{html.escape(host_ui_js_url)}"></script>'
         summary_bar = st.get("summary_bar") or []
         preview_cards = st.get("preview_cards") or []
         preview_ui = st.get("preview_ui") or {}
@@ -1097,7 +1142,7 @@ window.__HOST_METRICS_BOOT__ = {{
   })},
 }};
 </script>
-<script src="{html.escape(host_ui_js_url)}"></script>
+{host_ui_js_tag}
 """
         return page_html("ESP Host Bridge", body)
 

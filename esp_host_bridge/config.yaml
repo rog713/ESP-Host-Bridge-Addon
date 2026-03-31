@@ -1,5 +1,5 @@
 name: "ESP Host Bridge"
-version: "2026.03.31.6"
+version: "2026.03.31.7"
 slug: "esp_host_bridge"
 description: "USB CDC bridge and host telemetry web UI for ESP display devices."
 url: "https://github.com/rog713/ESP-Host-Bridge-Addon"
