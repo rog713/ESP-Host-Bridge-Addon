@@ -419,6 +419,7 @@ HOST_PREVIEW_PAGES = (
         home_button_position="bl",
         home_button_title="Info",
         home_button_icon_class="mdi-information-outline",
+        homeassistant_home_button_long_target_page="activity",
     ),
     PreviewPageSpec(
         page_id="info_2",

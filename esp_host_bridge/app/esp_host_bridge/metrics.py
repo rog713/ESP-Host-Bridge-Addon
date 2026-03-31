@@ -9,6 +9,8 @@ import re
 import socket
 import subprocess
 import time
+import urllib.parse
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 
 from .runtime import (
@@ -124,6 +126,169 @@ def get_home_assistant_integrations(timeout: float) -> list[dict[str, Any]]:
             }
         )
     return normalized
+
+
+def _sanitize_compact_token(value: Any, fallback: str = "") -> str:
+    text = str(value or fallback).strip()
+    if not text:
+        text = fallback
+    return text.replace(",", "_").replace(";", "_").replace("|", "_")
+
+
+def _compact_activity_age(seconds: Optional[float]) -> str:
+    value = max(0, int(round(safe_float(seconds, 0.0) or 0.0)))
+    if value < 90:
+        return f"{value}s"
+    if value < 5400:
+        return f"{max(1, round(value / 60))}m"
+    if value < 172800:
+        return f"{max(1, round(value / 3600))}h"
+    return f"{max(1, round(value / 86400))}d"
+
+
+ACTIVITY_SOURCE_LABELS = {
+    "automation": "auto",
+    "binary_sensor": "binary",
+    "button": "button",
+    "camera": "camera",
+    "climate": "climate",
+    "cover": "cover",
+    "device_tracker": "tracker",
+    "event": "event",
+    "fan": "fan",
+    "input_boolean": "boolean",
+    "input_number": "number",
+    "input_select": "select",
+    "light": "light",
+    "lock": "lock",
+    "media_player": "media",
+    "number": "number",
+    "person": "person",
+    "remote": "remote",
+    "scene": "scene",
+    "script": "script",
+    "select": "select",
+    "sensor": "sensor",
+    "sun": "sun",
+    "switch": "switch",
+    "update": "update",
+    "vacuum": "vacuum",
+    "weather": "weather",
+}
+
+
+def _compact_activity_source(domain: Any, entity_id: Any) -> str:
+    source = str(domain or "").strip().lower()
+    entity = str(entity_id or "").strip().lower()
+    if not source and "." in entity:
+        source = entity.split(".", 1)[0]
+    if not source:
+        return ""
+    label = ACTIVITY_SOURCE_LABELS.get(source, source.replace("_", " "))
+    label = _sanitize_compact_token(label, "")
+    return label[:10]
+
+
+def _compact_activity_tail(entity_id: Any) -> str:
+    tail = str(entity_id or "").strip()
+    if "." in tail:
+        tail = tail.split(".", 1)[1]
+    tail = _sanitize_compact_token(tail, "")
+    return tail[:18]
+
+
+def compact_activity_entries(rows: list[dict[str, Any]], max_items: int = 5) -> str:
+    out: list[str] = []
+    now = time.time()
+    for row in rows[:max_items]:
+        if not isinstance(row, dict):
+            continue
+        name = _sanitize_compact_token(row.get("name"), "Activity")[:22]
+        message = _sanitize_compact_token(row.get("message"), "updated")[:16]
+        source = _sanitize_compact_token(
+            row.get("source"),
+            _compact_activity_source(row.get("domain"), row.get("entity_id")),
+        )[:10]
+        tail = _sanitize_compact_token(
+            row.get("entity_tail"),
+            _compact_activity_tail(row.get("entity_id")),
+        )[:18]
+        when_ts = safe_float(row.get("when_ts"), None)
+        age = _compact_activity_age((now - when_ts) if when_ts is not None and when_ts > 0 else None)[:5]
+        out.append(f"{name}|{message}|{age}|{source}|{tail}")
+    return ";".join(out) if out else "-"
+
+
+def _parse_home_assistant_timestamp(value: Any) -> Optional[datetime]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _format_home_assistant_timestamp(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
+def get_home_assistant_logbook_entries(
+    timeout: float,
+    *,
+    limit: int = 12,
+    lookback_minutes: int = 180,
+) -> list[dict[str, Any]]:
+    if not SUPERVISOR_TOKEN:
+        raise RuntimeError("SUPERVISOR_TOKEN is not available")
+    safe_limit = max(1, min(25, safe_int(limit, 12) or 12))
+    safe_lookback = max(5, min(1440, safe_int(lookback_minutes, 180) or 180))
+    end_dt = datetime.now(timezone.utc)
+    start_dt = end_dt - timedelta(minutes=safe_lookback)
+    start_token = urllib.parse.quote(_format_home_assistant_timestamp(start_dt), safe="")
+    query = urllib.parse.urlencode({"end_time": _format_home_assistant_timestamp(end_dt)})
+    payload = _supervisor_request_json(f"/core/api/logbook/{start_token}?{query}", timeout=timeout)
+    rows = payload if isinstance(payload, list) else []
+    entries: list[dict[str, Any]] = []
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        domain = str(item.get("domain") or "").strip().lower()
+        entity_id = str(item.get("entity_id") or "").strip()
+        message = str(item.get("message") or "").strip()
+        when_raw = str(item.get("when") or "").strip()
+        when_dt = _parse_home_assistant_timestamp(when_raw)
+        when_ts = float(when_dt.timestamp()) if when_dt else 0.0
+        if not name:
+            if entity_id:
+                name = _humanize_home_assistant_slug(entity_id.split(".", 1)[-1])
+            elif domain:
+                name = _humanize_home_assistant_slug(domain)
+            else:
+                name = "Activity"
+        if not message:
+            message = "updated"
+        entries.append(
+            {
+                "name": name,
+                "message": message,
+                "summary": f"{name} {message}".strip(),
+                "entity_id": entity_id,
+                "entity_tail": _compact_activity_tail(entity_id),
+                "domain": domain,
+                "source": _compact_activity_source(domain, entity_id),
+                "when": when_raw,
+                "when_ts": when_ts,
+            }
+        )
+    entries.sort(key=lambda row: (float(row.get("when_ts") or 0.0), str(row.get("summary") or "")), reverse=True)
+    return entries[:safe_limit]
 
 def normalize_docker_data(v: Any) -> list[dict[str, Any]]:
     if isinstance(v, list):
@@ -1010,6 +1175,7 @@ __all__ = [
     "get_gpu_metrics",
     "get_home_assistant_addons",
     "get_home_assistant_integrations",
+    "get_home_assistant_logbook_entries",
     "get_mem_percent",
     "get_net_bytes_local",
     "get_uptime_seconds",
@@ -1018,6 +1184,7 @@ __all__ = [
     "list_disk_device_choices",
     "list_fan_sensor_choices",
     "list_network_interface_choices",
+    "compact_activity_entries",
     "normalize_docker_data",
     "vm_summary_counts",
 ]

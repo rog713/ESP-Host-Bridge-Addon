@@ -16,6 +16,7 @@ from .base import (
     PreviewPageSpec,
     SummaryChipSpec,
 )
+from .activity import ACTIVITY_INTEGRATION
 from .docker import DOCKER_INTEGRATION
 from .host import HOST_INTEGRATION
 from .vms import VMS_INTEGRATION
@@ -24,6 +25,7 @@ _REGISTERED_INTEGRATIONS: tuple[IntegrationSpec, ...] = (
     HOST_INTEGRATION,
     DOCKER_INTEGRATION,
     VMS_INTEGRATION,
+    ACTIVITY_INTEGRATION,
 )
 
 _BUILTIN_COMMANDS: tuple[CommandSpec, ...] = (
@@ -71,6 +73,22 @@ def get_registered_integrations() -> tuple[IntegrationSpec, ...]:
     return _REGISTERED_INTEGRATIONS
 
 
+def _visible_integrations(*, homeassistant_mode: bool) -> tuple[IntegrationSpec, ...]:
+    return tuple(
+        integration
+        for integration in _REGISTERED_INTEGRATIONS
+        if not integration.homeassistant_only or homeassistant_mode
+    )
+
+
+def _visible_commands(*, homeassistant_mode: bool) -> tuple[CommandSpec, ...]:
+    return tuple(
+        spec
+        for spec in get_registered_commands()
+        if spec.homeassistant_enabled or not homeassistant_mode
+    )
+
+
 def get_integration_spec(integration_id: str) -> Optional[IntegrationSpec]:
     target = str(integration_id or "").strip().lower()
     if not target:
@@ -83,7 +101,8 @@ def get_integration_spec(integration_id: str) -> Optional[IntegrationSpec]:
 
 def integration_dashboard_snapshot(*, homeassistant_mode: bool = False) -> list[Dict[str, Any]]:
     rows: list[Dict[str, Any]] = []
-    for integration in _REGISTERED_INTEGRATIONS:
+    visible_commands = _visible_commands(homeassistant_mode=homeassistant_mode)
+    for integration in _visible_integrations(homeassistant_mode=homeassistant_mode):
         label = (
             str(integration.homeassistant_title or "").strip()
             if homeassistant_mode and str(integration.homeassistant_title or "").strip()
@@ -101,9 +120,7 @@ def integration_dashboard_snapshot(*, homeassistant_mode: bool = False) -> list[
                 "icon_class": str(integration.icon_class or "mdi-puzzle-outline"),
                 "sort_order": int(integration.sort_order),
                 "action_group_title": action_group_title or label,
-                "command_count": len(integration.commands) + (
-                    len([spec for spec in _BUILTIN_COMMANDS if spec.owner_id == integration.integration_id])
-                ),
+                "command_count": len([spec for spec in visible_commands if spec.owner_id == integration.integration_id]),
             }
         )
     rows.sort(key=lambda row: (int(row.get("sort_order", 100)), str(row.get("label", ""))))
@@ -180,7 +197,7 @@ def _preview_card_snapshot(
 
 def preview_cards_snapshot(*, homeassistant_mode: bool = False) -> list[Dict[str, Any]]:
     rows: list[Dict[str, Any]] = []
-    for integration in _REGISTERED_INTEGRATIONS:
+    for integration in _visible_integrations(homeassistant_mode=homeassistant_mode):
         for preview_order, card in enumerate(integration.preview_cards):
             rows.append(
                 _preview_card_snapshot(
@@ -224,6 +241,11 @@ def _preview_page_snapshot(page: PreviewPageSpec, *, homeassistant_mode: bool) -
         str(page.homeassistant_home_button_icon_class or "").strip()
         if homeassistant_mode and str(page.homeassistant_home_button_icon_class or "").strip()
         else str(page.home_button_icon_class or "").strip()
+    )
+    home_button_long_target_page = (
+        str(page.homeassistant_home_button_long_target_page or "").strip()
+        if homeassistant_mode and str(page.homeassistant_home_button_long_target_page or "").strip()
+        else str(page.home_button_long_target_page or "").strip()
     )
     modal_title = (
         str(page.homeassistant_modal_title or "").strip()
@@ -296,6 +318,7 @@ def _preview_page_snapshot(page: PreviewPageSpec, *, homeassistant_mode: bool) -
         "home_button_position": str(page.home_button_position or "").strip() or None,
         "home_button_title": home_button_title or None,
         "home_button_icon_class": home_button_icon_class or None,
+        "home_button_long_target_page": home_button_long_target_page or None,
         "modal_target": str(page.modal_target or "").strip() or None,
         "modal_title": modal_title or None,
         "modal_subtitle": modal_subtitle or None,
@@ -311,7 +334,7 @@ def _preview_page_snapshot(page: PreviewPageSpec, *, homeassistant_mode: bool) -
 
 def preview_ui_snapshot(*, homeassistant_mode: bool = False) -> Dict[str, Any]:
     pages: list[Dict[str, Any]] = []
-    for integration in _REGISTERED_INTEGRATIONS:
+    for integration in _visible_integrations(homeassistant_mode=homeassistant_mode):
         for page in integration.preview_pages:
             pages.append(_preview_page_snapshot(page, homeassistant_mode=homeassistant_mode))
     pages.sort(key=lambda row: (int(row.get("preview_order", 999)), str(row.get("page_id", ""))))
@@ -331,6 +354,7 @@ def preview_ui_snapshot(*, homeassistant_mode: bool = False) -> Dict[str, Any]:
             "target_page": row["page_id"],
             "title": str(row.get("home_button_title") or row["page_id"]),
             "icon_class": str(row.get("home_button_icon_class") or "mdi-circle-outline"),
+            "long_target_page": str(row.get("home_button_long_target_page") or "").strip() or None,
         }
         for row in pages
         if row.get("home_button_position")
@@ -385,7 +409,7 @@ def preview_action_groups_snapshot(*, homeassistant_mode: bool = False) -> list[
         if str(row.get("integration_id") or "").strip()
     }
     groups: Dict[str, Dict[str, Any]] = {}
-    for spec in get_registered_commands():
+    for spec in _visible_commands(homeassistant_mode=homeassistant_mode):
         target = str(spec.preview_target or "").strip().lower()
         action_id = str(spec.preview_action_id or "").strip()
         if not target or not action_id:
@@ -470,7 +494,7 @@ def _dashboard_group_snapshot(
 
 def monitor_dashboard_snapshot(*, homeassistant_mode: bool = False) -> list[Dict[str, Any]]:
     rows: list[Dict[str, Any]] = []
-    for integration in _REGISTERED_INTEGRATIONS:
+    for integration in _visible_integrations(homeassistant_mode=homeassistant_mode):
         for group in integration.dashboard_groups:
             rows.append(_dashboard_group_snapshot(integration, group, homeassistant_mode=homeassistant_mode))
     return rows
@@ -504,7 +528,7 @@ def _dashboard_detail_snapshot(detail: DashboardDetailSpec, *, homeassistant_mod
 
 def monitor_detail_snapshot(*, homeassistant_mode: bool = False) -> list[Dict[str, Any]]:
     rows: list[Dict[str, Any]] = []
-    for integration in _REGISTERED_INTEGRATIONS:
+    for integration in _visible_integrations(homeassistant_mode=homeassistant_mode):
         for detail in integration.dashboard_details:
             row = _dashboard_detail_snapshot(detail, homeassistant_mode=homeassistant_mode)
             row["integration_id"] = integration.integration_id
@@ -517,7 +541,7 @@ def monitor_detail_payload_snapshot(
 ) -> Dict[str, Dict[str, Any]]:
     payloads: Dict[str, Dict[str, Any]] = {}
     metrics = last_metrics if isinstance(last_metrics, dict) else {}
-    for integration in _REGISTERED_INTEGRATIONS:
+    for integration in _visible_integrations(homeassistant_mode=homeassistant_mode):
         if integration.detail_payloads is None:
             continue
         payloads.update(integration.detail_payloads(metrics, homeassistant_mode))
@@ -566,7 +590,7 @@ def integration_cfg_to_agent_args(cfg: Dict[str, Any], cleaners: CleanerSet) -> 
 
 def poll_integrations(ctx: PollContext) -> Dict[str, Dict[str, Any]]:
     out: Dict[str, Dict[str, Any]] = {}
-    for integration in _REGISTERED_INTEGRATIONS:
+    for integration in _visible_integrations(homeassistant_mode=ctx.homeassistant_mode):
         if integration.poll is None:
             continue
         out[integration.integration_id] = integration.poll(ctx)
@@ -612,9 +636,9 @@ def match_registered_command(cmd: str) -> Optional[CommandSpec]:
     return None
 
 
-def command_registry_snapshot() -> list[Dict[str, Any]]:
+def command_registry_snapshot(*, homeassistant_mode: bool = False) -> list[Dict[str, Any]]:
     out: list[Dict[str, Any]] = []
-    for spec in get_registered_commands():
+    for spec in _visible_commands(homeassistant_mode=homeassistant_mode):
         out.append(
             {
                 "command_id": spec.command_id,
@@ -624,6 +648,7 @@ def command_registry_snapshot() -> list[Dict[str, Any]]:
                 "label": spec.label,
                 "destructive": spec.destructive,
                 "confirmation_text": spec.confirmation_text or None,
+                "homeassistant_enabled": spec.homeassistant_enabled,
             }
         )
     return out

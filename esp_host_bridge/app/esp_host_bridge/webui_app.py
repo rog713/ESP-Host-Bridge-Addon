@@ -246,15 +246,26 @@ def _render_monitor_detail_sections(details: list[dict[str, Any]]) -> str:
         span_class = html.escape(str(detail.get("span_class") or "span6"))
         waiting_text = html.escape(str(detail.get("waiting_text") or "Waiting for data..."))
         show_all_text = html.escape(str(detail.get("show_all_text") or "Show all"))
+        render_kind = str(detail.get("render_kind") or "status_list")
+        if render_kind == "activity_list":
+            body = (
+                f'<div class="mcard"><div class="metric-sub" id="{html.escape(detail_id)}MoreHint">{waiting_text}</div>'
+                f'<div class="activity-empty" id="{html.escape(detail_id)}Empty">{waiting_text}</div>'
+                f'<ul class="activity-list" id="{html.escape(detail_id)}PreviewList"></ul>'
+                f'<details><summary class="monitor-note">{show_all_text}</summary>'
+                f'<ul class="activity-list" id="{html.escape(detail_id)}AllList"></ul></details></div>'
+            )
+        else:
+            body = (
+                f'<div class="mcard"><div class="metric-sub" id="{html.escape(detail_id)}MoreHint">{waiting_text}</div>'
+                f'<ul class="docker-list" id="{html.escape(detail_id)}PreviewList"></ul>'
+                f'<details><summary class="monitor-note">{show_all_text}</summary>'
+                f'<ul class="docker-list" id="{html.escape(detail_id)}AllList"></ul></details></div>'
+            )
         sections.append(
             f'<section class="mgroup {span_class}">'
             f'<h3><span class="gicon" aria-hidden="true"><span class="mdi mdi-apps"></span></span>{title}</h3>'
-            '<div class="mgroup-grid">'
-            f'<div class="mcard"><div class="metric-sub" id="{html.escape(detail_id)}MoreHint">{waiting_text}</div>'
-            f'<ul class="docker-list" id="{html.escape(detail_id)}PreviewList"></ul>'
-            f'<details><summary class="monitor-note">{show_all_text}</summary>'
-            f'<ul class="docker-list" id="{html.escape(detail_id)}AllList"></ul></details></div>'
-            '</div></section>'
+            f'<div class="mgroup-grid">{body}</div></section>'
         )
     return "".join(sections)
 
@@ -294,8 +305,10 @@ def _render_preview_home_buttons(preview_ui: dict[str, Any]) -> str:
             continue
         title = html.escape(str(button.get("title") or target_page))
         icon_class = html.escape(str(button.get("icon_class") or "mdi-circle-outline"))
+        long_target_page = str(button.get("long_target_page") or "").strip()
+        long_attr = f' data-esp-long-nav="{html.escape(long_target_page)}"' if long_target_page else ""
         rows.append(
-            f'<div class="esp-home-btn {html.escape(position)}" data-esp-nav="{html.escape(target_page)}" title="{title}">'
+            f'<div class="esp-home-btn {html.escape(position)}" data-esp-nav="{html.escape(target_page)}"{long_attr} title="{title}">'
             f'<span class="mdi {icon_class}"></span></div>'
         )
     return "".join(rows)
@@ -423,6 +436,17 @@ def _render_preview_page(page: dict[str, Any]) -> str:
             f'<div class="esp-workload-empty-icon"><span class="mdi {icon_class}"></span></div>'
             '<div class="esp-workload-empty-title"></div>'
             '<div class="esp-workload-empty-subtitle"></div>'
+            '</div></div>'
+        )
+    elif render_kind == "activity_list":
+        rows_id = html.escape(str(render_data.get("rows_id") or ""))
+        empty_id = html.escape(str(render_data.get("empty_id") or ""))
+        body = (
+            '<div class="esp-activity-page">'
+            '<div class="esp-page-hint"></div>'
+            '<div class="esp-activity-card">'
+            f'<div class="esp-activity-empty" id="{empty_id}">Waiting for recent activity...</div>'
+            f'<div class="esp-activity-rows" id="{rows_id}"></div>'
             '</div></div>'
         )
     elif render_kind == "uptime":
@@ -928,6 +952,7 @@ def create_app(
       {_render_integration_setup_section(cfg, "host", homeassistant_mode)}
       {_render_integration_setup_section(cfg, "docker", homeassistant_mode)}
       {_render_integration_setup_section(cfg, "vms", homeassistant_mode)}
+      {_render_integration_setup_section(cfg, "activity", homeassistant_mode) if homeassistant_mode else ""}
       <details class=\"section\" data-section-key=\"power_commands\"><summary><span class=\"section-icon\" aria-hidden=\"true\"><span class=\"mdi mdi-power\"></span></span>Power Commands</summary><div class=\"section-body\">
       {power_commands_body}
       </div></details>
@@ -1096,7 +1121,7 @@ def create_app(
             </div>
           </div>
           <div class="esp-preview-meta"><span id="espFooterPage">Preview • {html.escape(str(preview_home.get('footer') or 'HOME'))}</span><span id="espFooterPort">Port: --</span></div>
-          <div class="monitor-note">Interactive browser simulator driven by live bridge telemetry. Swipe in the preview, click HOME quadrants, or long-press Docker and VM rows for actions.</div>
+          <div class="monitor-note">Interactive browser simulator driven by live bridge telemetry. Swipe in the preview, click HOME quadrants, long-press the Info quadrant for Activity in Home Assistant mode, or long-press workload rows for actions.</div>
         </div>
       </section>
       <div id="monitorDashboardSections">{_render_monitor_dashboard_sections(monitor_dashboard)}</div>

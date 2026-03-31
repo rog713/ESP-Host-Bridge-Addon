@@ -86,6 +86,7 @@ VMS_COMMANDS = (
         patterns=("vm_start:",),
         match_kind="prefix",
         label="Start Virtual Machine",
+        homeassistant_enabled=False,
         preview_target="vms",
         preview_action_id="start",
         preview_label="Start",
@@ -101,6 +102,7 @@ VMS_COMMANDS = (
         label="Stop Virtual Machine",
         destructive=True,
         confirmation_text="Shut down the selected virtual machine",
+        homeassistant_enabled=False,
         preview_target="vms",
         preview_action_id="stop",
         preview_label="Stop",
@@ -116,6 +118,7 @@ VMS_COMMANDS = (
         label="Force Stop Virtual Machine",
         destructive=True,
         confirmation_text="Force stop the selected virtual machine",
+        homeassistant_enabled=False,
     ),
     CommandSpec(
         command_id="vm_restart",
@@ -125,6 +128,7 @@ VMS_COMMANDS = (
         label="Restart Virtual Machine",
         destructive=True,
         confirmation_text="Restart the selected virtual machine",
+        homeassistant_enabled=False,
         preview_target="vms",
         preview_action_id="restart",
         preview_label="Restart",
@@ -446,7 +450,7 @@ def poll(ctx: PollContext) -> Dict[str, Any]:
             "last_success_ts": last_success_ts or None,
             "last_error": last_error or None,
             "last_error_ts": last_error_ts or None,
-            "commands": [spec.command_id for spec in VMS_COMMANDS],
+            "commands": [] if ctx.homeassistant_mode else [spec.command_id for spec in VMS_COMMANDS],
             "api_ok": cache.get("api_ok"),
         },
     }
@@ -481,6 +485,10 @@ def handle_command(cmd: str, ctx: CommandContext) -> bool:
         parts = ("reboot", target)
     else:
         return False
+
+    if ctx.homeassistant_mode:
+        logging.info("ignoring Home Assistant integration command over vms transport (CMD=%s)", cmd_s)
+        return True
 
     if not target:
         logging.warning("ignoring VM command with empty target (CMD=%s)", cmd_s)

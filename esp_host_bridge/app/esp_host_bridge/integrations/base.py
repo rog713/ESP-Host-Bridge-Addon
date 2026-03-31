@@ -77,6 +77,7 @@ class CommandSpec:
     label: str = ""
     destructive: bool = False
     confirmation_text: str = ""
+    homeassistant_enabled: bool = True
     preview_target: Optional[str] = None
     preview_action_id: Optional[str] = None
     preview_label: Optional[str] = None
@@ -160,6 +161,7 @@ class PreviewPageSpec:
     home_button_position: Optional[str] = None
     home_button_title: str = ""
     home_button_icon_class: str = ""
+    home_button_long_target_page: Optional[str] = None
     modal_target: Optional[str] = None
     modal_title: str = ""
     modal_subtitle: str = ""
@@ -176,6 +178,7 @@ class PreviewPageSpec:
     homeassistant_tab_icon_class: Optional[str] = None
     homeassistant_home_button_title: Optional[str] = None
     homeassistant_home_button_icon_class: Optional[str] = None
+    homeassistant_home_button_long_target_page: Optional[str] = None
     homeassistant_modal_title: Optional[str] = None
     homeassistant_modal_subtitle: Optional[str] = None
     homeassistant_modal_icon_class: Optional[str] = None
@@ -202,6 +205,7 @@ class IntegrationSpec:
     integration_id: str
     title: str = ""
     homeassistant_title: Optional[str] = None
+    homeassistant_only: bool = False
     section_key: str = ""
     icon_class: str = ""
     sort_order: int = 100

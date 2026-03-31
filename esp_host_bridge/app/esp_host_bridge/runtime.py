@@ -610,9 +610,12 @@ def build_status_line(args: argparse.Namespace, state: RuntimeState) -> str:
         now=now,
         homeassistant_mode=homeassistant_mode,
     )
-    frame = state.tx_frame_index % 5
-    state.tx_frame_index = (state.tx_frame_index + 1) % 5
-    return runtime_snapshot["usb_frames"][frame]
+    usb_frames = tuple(runtime_snapshot.get("usb_frames") or ())
+    if not usb_frames:
+        return ""
+    frame = state.tx_frame_index % len(usb_frames)
+    state.tx_frame_index = (state.tx_frame_index + 1) % len(usb_frames)
+    return usb_frames[frame]
 
 
 def _metric_text(value: Any) -> str:
@@ -665,8 +668,16 @@ def build_runtime_metric_snapshot(
     vm_compact = str(vm_status.get("compact") or "-")
     state.ha_integrations_api_ok = vm_status.get("api_ok")
 
+    activity_status = integration_status.get("activity") or {}
+    activity_enabled = bool(
+        activity_status.get("enabled", homeassistant_mode and not bool(getattr(args, "disable_activity_polling", False)))
+    )
+    activity_compact = str(activity_status.get("compact") or "-")
+    activity_api_ok = activity_status.get("api_ok")
+
     ha_docker_api = -1 if state.ha_addons_api_ok is None else (1 if state.ha_addons_api_ok else 0)
     ha_vms_api = -1 if state.ha_integrations_api_ok is None else (1 if state.ha_integrations_api_ok else 0)
+    act_api = -1 if activity_api_ok is None else (1 if activity_api_ok else 0)
 
     return {
         "CPU": f"{cpu_pct:.1f}",
@@ -684,6 +695,9 @@ def build_runtime_metric_snapshot(
         "GPUEN": "1" if gpu_enabled else "0",
         "DOCKEREN": "1" if docker_enabled else "0",
         "VMSEN": "1" if vm_enabled else "0",
+        "ADDONSEN": "1" if docker_enabled else "0",
+        "INTEGRATIONSEN": "1" if vm_enabled else "0",
+        "ACTEN": "1" if activity_enabled else "0",
         "DISK": f"{state.disk_temp_c:.1f}",
         "DISKPCT": f"{state.disk_usage_pct:.1f}",
         "DISKR": f"{disk_r_kbs:.0f}",
@@ -699,17 +713,88 @@ def build_runtime_metric_snapshot(
         "DOCKSTOP": str(int(docker_counts.get("stopped", 0))),
         "DOCKUNH": str(int(docker_counts.get("unhealthy", 0))),
         "DOCKER": docker_compact,
+        "ADDONSRUN": str(int(docker_counts.get("running", 0))),
+        "ADDONSSTOP": str(int(docker_counts.get("stopped", 0))),
+        "ADDONSISSUE": str(int(docker_counts.get("unhealthy", 0))),
+        "ADDONS": docker_compact,
         "VMSRUN": str(int(vm_counts.get("running", 0))),
         "VMSSTOP": str(int(vm_counts.get("stopped", 0))),
         "VMSPAUSE": str(int(vm_counts.get("paused", 0))),
         "VMSOTHER": str(int(vm_counts.get("other", 0))),
         "VMS": vm_compact,
+        "INTEGRATIONSRUN": str(int(vm_counts.get("running", 0))),
+        "INTEGRATIONSSTOP": str(int(vm_counts.get("stopped", 0))),
+        "INTEGRATIONSPAUSE": str(int(vm_counts.get("paused", 0))),
+        "INTEGRATIONSOTHER": str(int(vm_counts.get("other", 0))),
+        "INTEGRATIONS": vm_compact,
+        "ACTAPI": str(act_api),
+        "ACTIVITY": activity_compact,
         "POWER": "RUNNING",
     }
 
 
-def build_usb_status_frames(metric_snapshot: Dict[str, Any]) -> tuple[str, str, str, str, str]:
+def build_usb_status_frames(metric_snapshot: Dict[str, Any]) -> tuple[str, ...]:
     metrics = metric_snapshot if isinstance(metric_snapshot, dict) else {}
+    homeassistant_mode = _metric_text(metrics.get("HAMODE")) == "1"
+    if homeassistant_mode:
+        return (
+            (
+                f"CPU={_metric_text(metrics.get('CPU'))},"
+                f"TEMP={_metric_text(metrics.get('TEMP'))},"
+                f"MEM={_metric_text(metrics.get('MEM'))},"
+                f"UP={_metric_text(metrics.get('UP'))},"
+                f"RX={_metric_text(metrics.get('RX'))},"
+                f"TX={_metric_text(metrics.get('TX'))},"
+                f"IFACE={_metric_text(metrics.get('IFACE'))},"
+                f"TEMPAV={_metric_text(metrics.get('TEMPAV'))},"
+                f"HAMODE={_metric_text(metrics.get('HAMODE'))},"
+                f"HATOKEN={_metric_text(metrics.get('HATOKEN'))},"
+                f"HADOCKAPI={_metric_text(metrics.get('HADOCKAPI'))},"
+                f"HAVMSAPI={_metric_text(metrics.get('HAVMSAPI'))},"
+                f"ADDONSEN={_metric_text(metrics.get('ADDONSEN'))},"
+                f"INTEGRATIONSEN={_metric_text(metrics.get('INTEGRATIONSEN'))},"
+                f"ACTEN={_metric_text(metrics.get('ACTEN'))},"
+                f"ACTAPI={_metric_text(metrics.get('ACTAPI'))},"
+                f"GPUEN={_metric_text(metrics.get('GPUEN'))},"
+                f"POWER={_metric_text(metrics.get('POWER'))}\n"
+            ),
+            (
+                f"DISK={_metric_text(metrics.get('DISK'))},"
+                f"DISKPCT={_metric_text(metrics.get('DISKPCT'))},"
+                f"DISKR={_metric_text(metrics.get('DISKR'))},"
+                f"DISKW={_metric_text(metrics.get('DISKW'))},"
+                f"FAN={_metric_text(metrics.get('FAN'))},"
+                f"DISKTAV={_metric_text(metrics.get('DISKTAV'))},"
+                f"FANAV={_metric_text(metrics.get('FANAV'))},"
+                f"POWER={_metric_text(metrics.get('POWER'))}\n"
+            ),
+            (
+                f"GPUT={_metric_text(metrics.get('GPUT'))},"
+                f"GPUU={_metric_text(metrics.get('GPUU'))},"
+                f"GPUVM={_metric_text(metrics.get('GPUVM'))},"
+                f"GPUAV={_metric_text(metrics.get('GPUAV'))},"
+                f"POWER={_metric_text(metrics.get('POWER'))}\n"
+            ),
+            (
+                f"ADDONSRUN={_metric_text(metrics.get('ADDONSRUN'))},"
+                f"ADDONSSTOP={_metric_text(metrics.get('ADDONSSTOP'))},"
+                f"ADDONSISSUE={_metric_text(metrics.get('ADDONSISSUE'))},"
+                f"ADDONS={_metric_text(metrics.get('ADDONS'))},"
+                f"POWER={_metric_text(metrics.get('POWER'))}\n"
+            ),
+            (
+                f"INTEGRATIONSRUN={_metric_text(metrics.get('INTEGRATIONSRUN'))},"
+                f"INTEGRATIONSSTOP={_metric_text(metrics.get('INTEGRATIONSSTOP'))},"
+                f"INTEGRATIONSPAUSE={_metric_text(metrics.get('INTEGRATIONSPAUSE'))},"
+                f"INTEGRATIONSOTHER={_metric_text(metrics.get('INTEGRATIONSOTHER'))},"
+                f"INTEGRATIONS={_metric_text(metrics.get('INTEGRATIONS'))},"
+                f"POWER={_metric_text(metrics.get('POWER'))}\n"
+            ),
+            (
+                f"ACTIVITY={_metric_text(metrics.get('ACTIVITY'))},"
+                f"POWER={_metric_text(metrics.get('POWER'))}\n"
+            ),
+        )
     return (
         (
             f"CPU={_metric_text(metrics.get('CPU'))},"
@@ -807,7 +892,11 @@ def build_browser_status_payload(
         payload["cmd"] = redact_agent_command_args(cmd, redact_mask)
     last_metrics = payload.get("last_metrics", {})
     integration_health = payload.get("integration_health", {})
-    command_registry = payload.get("command_registry", [])
+    command_registry = [
+        row for row in list(payload.get("command_registry", []) or [])
+        if not homeassistant_mode or bool((row or {}).get("homeassistant_enabled", True))
+    ]
+    payload["command_registry"] = command_registry
     payload["integration_dashboard"] = integration_dashboard_snapshot(
         homeassistant_mode=homeassistant_mode
     )
@@ -1125,6 +1214,32 @@ class RunnerManager:
             metrics[key] = val
         if not metrics:
             return
+        if "ADDONSEN" in metrics and "DOCKEREN" not in metrics:
+            metrics["DOCKEREN"] = metrics["ADDONSEN"]
+        if "INTEGRATIONSEN" in metrics and "VMSEN" not in metrics:
+            metrics["VMSEN"] = metrics["INTEGRATIONSEN"]
+        if "HAADDONSAPI" in metrics and "HADOCKAPI" not in metrics:
+            metrics["HADOCKAPI"] = metrics["HAADDONSAPI"]
+        if "HAINTEGRATIONSAPI" in metrics and "HAVMSAPI" not in metrics:
+            metrics["HAVMSAPI"] = metrics["HAINTEGRATIONSAPI"]
+        if "ADDONSRUN" in metrics and "DOCKRUN" not in metrics:
+            metrics["DOCKRUN"] = metrics["ADDONSRUN"]
+        if "ADDONSSTOP" in metrics and "DOCKSTOP" not in metrics:
+            metrics["DOCKSTOP"] = metrics["ADDONSSTOP"]
+        if "ADDONSISSUE" in metrics and "DOCKUNH" not in metrics:
+            metrics["DOCKUNH"] = metrics["ADDONSISSUE"]
+        if "ADDONS" in metrics and "DOCKER" not in metrics:
+            metrics["DOCKER"] = metrics["ADDONS"]
+        if "INTEGRATIONSRUN" in metrics and "VMSRUN" not in metrics:
+            metrics["VMSRUN"] = metrics["INTEGRATIONSRUN"]
+        if "INTEGRATIONSSTOP" in metrics and "VMSSTOP" not in metrics:
+            metrics["VMSSTOP"] = metrics["INTEGRATIONSSTOP"]
+        if "INTEGRATIONSPAUSE" in metrics and "VMSPAUSE" not in metrics:
+            metrics["VMSPAUSE"] = metrics["INTEGRATIONSPAUSE"]
+        if "INTEGRATIONSOTHER" in metrics and "VMSOTHER" not in metrics:
+            metrics["VMSOTHER"] = metrics["INTEGRATIONSOTHER"]
+        if "INTEGRATIONS" in metrics and "VMS" not in metrics:
+            metrics["VMS"] = metrics["INTEGRATIONS"]
         now_ts = time.time()
         with self._lock:
             merged = dict(self._last_metrics)
@@ -1167,6 +1282,8 @@ class RunnerManager:
             _touch("docker")
         if metric_keys.intersection({"VMSRUN", "VMSSTOP", "VMSPAUSE", "VMSOTHER", "VMS"}):
             _touch("vms")
+        if metric_keys.intersection({"ACTEN", "ACTAPI", "ACTIVITY"}):
+            _touch("activity")
 
     def _try_capture_esp_boot(self, line: str) -> None:
         raw = (line or "").strip()
@@ -1361,7 +1478,7 @@ class RunnerManager:
                 "last_metrics_line": self._last_metrics_line,
                 "active_iface": active_iface,
                 "integration_health": copy.deepcopy(self._integration_health_or_default()),
-                "command_registry": command_registry_snapshot(),
+                "command_registry": command_registry_snapshot(homeassistant_mode=is_home_assistant_app_mode()),
                 "metric_history": {k: [float(vv) for _, vv in rows] for k, rows in self._metric_history.items()},
             }
 

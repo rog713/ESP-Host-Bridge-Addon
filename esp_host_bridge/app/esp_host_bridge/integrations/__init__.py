@@ -12,6 +12,7 @@ from .base import (
     PreviewPageSpec,
     SummaryChipSpec,
 )
+from .activity import ACTIVITY_INTEGRATION
 from .host import HOST_INTEGRATION
 from .registry import (
     command_registry_snapshot,
@@ -41,6 +42,7 @@ from .registry import (
 
 __all__ = [
     "CleanerSet",
+    "ACTIVITY_INTEGRATION",
     "CommandContext",
     "CommandSpec",
     "ConfigFieldSpec",

@@ -1,6 +1,6 @@
 # ESP Host Bridge Add-on Repository
 
-This folder contains the Home Assistant add-on packaging for `ESP Host Bridge`.
+This directory is the maintained source for the Home Assistant add-on export.
 
 ## Install
 
@@ -21,7 +21,7 @@ This folder contains the Home Assistant add-on packaging for `ESP Host Bridge`.
 
 - `repository.yaml`: Home Assistant repository metadata
 - `esp_host_bridge/`: add-on payload
-- `esp_host_bridge/sync_from_repo.sh`: vendors the maintained `esp_host_bridge` package into the add-on build context
+- `esp_host_bridge/app/`: vendored `esp_host_bridge` package used to build the add-on image
 
 ## Best fit
 

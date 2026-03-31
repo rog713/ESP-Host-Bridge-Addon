@@ -107,7 +107,9 @@ function renderPreviewUi(s) {
       const position = escapeHtml(String(button && button.position || ''));
       const title = escapeHtml(String(button && button.title || target));
       const iconClass = escapeHtml(String(button && button.icon_class || 'mdi-circle-outline'));
-      return `<div class="esp-home-btn ${position}" data-esp-nav="${target}" title="${title}"><span class="mdi ${iconClass}"></span></div>`;
+      const longTarget = escapeHtml(String(button && button.long_target_page || ''));
+      const longAttr = longTarget ? ` data-esp-long-nav="${longTarget}"` : '';
+      return `<div class="esp-home-btn ${position}" data-esp-nav="${target}"${longAttr} title="${title}"><span class="mdi ${iconClass}"></span></div>`;
     }).join('');
   }
 
@@ -748,12 +750,39 @@ function initEspPreview() {
   }
   const homeButtonsBox = document.getElementById('espHomeNavButtons');
   if (homeButtonsBox) {
+    let homeHoldTimer = null;
+    let homeHoldOpen = false;
+    const clearHomeHold = () => {
+      if (homeHoldTimer !== null) {
+        clearTimeout(homeHoldTimer);
+        homeHoldTimer = null;
+      }
+    };
     homeButtonsBox.addEventListener('click', (ev) => {
       const el = ev.target.closest('[data-esp-nav]');
       if (!el) return;
+      if (homeHoldOpen) {
+        homeHoldOpen = false;
+        return;
+      }
       ev.preventDefault();
       ev.stopPropagation();
       setEspPreviewPage(el.getAttribute('data-esp-nav') || 'home');
+    });
+    homeButtonsBox.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0) return;
+      const el = ev.target.closest('[data-esp-long-nav]');
+      clearHomeHold();
+      homeHoldOpen = false;
+      if (!el) return;
+      homeHoldTimer = window.setTimeout(() => {
+        homeHoldOpen = true;
+        setEspPreviewPage(el.getAttribute('data-esp-long-nav') || 'home');
+        clearHomeHold();
+      }, ESP_PREVIEW_LONG_PRESS_MS);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => {
+      homeButtonsBox.addEventListener(eventName, clearHomeHold);
     });
   }
   const screen = document.getElementById('espPreviewScreen');
@@ -970,6 +999,74 @@ function parseVmCompact(v) {
   items.sort((a, b) => (rank[a.stateKey] ?? 4) - (rank[b.stateKey] ?? 4) || a.name.localeCompare(b.name));
   return items;
 }
+function parseActivityCompact(v) {
+  const raw = String(v || '').trim();
+  if (!raw || raw === '-') return [];
+  return raw.split(';').map((item) => item.trim()).filter(Boolean).map((item) => {
+    const parts = item.split('|');
+    return {
+      name: String(parts[0] || '').trim(),
+      message: String(parts[1] || '').trim(),
+      age: String(parts[2] || '').trim(),
+      source: String(parts[3] || '').trim(),
+      tail: String(parts[4] || '').trim(),
+    };
+  }).filter((row) => row.name || row.message || row.age || row.source || row.tail).slice(0, 5);
+}
+function buildActivityItemsFromStatus(s) {
+  const payloads = monitorDetailPayloads(s);
+  const payload = (payloads && typeof payloads.activity === 'object') ? payloads.activity : null;
+  if (payload && Array.isArray(payload.items)) return payload.items.slice(0, 5);
+  const m = (s && s.last_metrics && typeof s.last_metrics === 'object') ? s.last_metrics : {};
+  return parseActivityCompact(m.ACTIVITY);
+}
+function renderEspActivityRows(items, s) {
+  const empty = document.getElementById('espActivityEmpty');
+  const list = document.getElementById('espActivityRows');
+  if (!empty || !list) return;
+  const payloads = monitorDetailPayloads(s);
+  const payload = (payloads && typeof payloads.activity === 'object') ? payloads.activity : {};
+  const rows = Array.isArray(items) ? items.slice(0, 5) : [];
+  list.innerHTML = '';
+  if (payload.enabled === false) {
+    empty.textContent = 'Recent activity polling is disabled.';
+    empty.hidden = false;
+    return;
+  }
+  if (payload.token_present === false) {
+    empty.textContent = 'Supervisor token is not available to the app.';
+    empty.hidden = false;
+    return;
+  }
+  if (!rows.length && payload.api_ok === false) {
+    empty.textContent = 'Home Assistant logbook API is unavailable.';
+    empty.hidden = false;
+    return;
+  }
+  if (!rows.length) {
+    empty.textContent = String(payload.hint || 'No recent activity in the current lookback window.');
+    empty.hidden = false;
+    return;
+  }
+  list.innerHTML = rows.map((row) => {
+    const source = String(row && row.source || '').trim();
+    const tail = String(row && row.tail || '').trim();
+    const message = String(row && row.message || '').trim();
+    const detail = [tail, message].filter(Boolean).join(' • ') || 'updated';
+    const age = String(row && row.age || '').trim();
+    return `<div class="esp-activity-row">
+      <div class="esp-activity-top">
+        <div class="esp-activity-name">${escapeHtml(row.name || 'Activity')}</div>
+        ${source ? `<div class="esp-activity-source">${escapeHtml(source)}</div>` : ''}
+      </div>
+      <div class="esp-activity-bottom">
+        <div class="esp-activity-detail">${escapeHtml(detail)}</div>
+        <div class="esp-activity-age">${escapeHtml(age)}</div>
+      </div>
+    </div>`;
+  }).join('');
+  empty.hidden = true;
+}
 function applyDockerPreviewOverrides(items) {
   return (Array.isArray(items) ? items : []).map((item) => {
     const override = espPreviewDockerOverrides[item.name];
@@ -1075,12 +1172,49 @@ function renderStatusListDetail(payload, detailId) {
   all.innerHTML = items.map(rowHtml).join('');
   hint.textContent = String(payload && payload.hint || 'Waiting for data...');
 }
+function renderActivityListDetail(payload, detailId) {
+  const prev = document.getElementById(`${detailId}PreviewList`);
+  const all = document.getElementById(`${detailId}AllList`);
+  const hint = document.getElementById(`${detailId}MoreHint`);
+  const empty = document.getElementById(`${detailId}Empty`);
+  if (!prev || !all || !hint || !empty) return;
+  const items = Array.isArray(payload && payload.items) ? payload.items : [];
+  const rowHtml = (row) => {
+    const name = escapeHtml(String(row && row.name || 'Activity'));
+    const message = escapeHtml(String(row && row.message || 'updated'));
+    const metaBits = [];
+    const source = String(row && row.source || '').trim();
+    const tail = String(row && row.tail || '').trim();
+    const age = String(row && row.age || '').trim();
+    if (source) metaBits.push(source);
+    if (tail) metaBits.push(tail);
+    if (age) metaBits.push(age);
+    return `<li class="activity-item">
+      <div class="activity-head">
+        <div class="activity-name">${name}</div>
+        <div class="activity-time">${escapeHtml(age || '--')}</div>
+      </div>
+      <div class="activity-message">${message}</div>
+      <div class="activity-meta">${escapeHtml(metaBits.join(' • '))}</div>
+    </li>`;
+  };
+  prev.innerHTML = items.slice(0, 5).map(rowHtml).join('');
+  all.innerHTML = items.map(rowHtml).join('');
+  hint.textContent = String(payload && payload.hint || 'Waiting for recent activity...');
+  empty.textContent = String(payload && payload.hint || 'Waiting for recent activity...');
+  empty.hidden = items.length > 0;
+}
 function updateMonitorDetailsFromMetadata(s) {
   const payloads = monitorDetailPayloads(s);
   monitorDetailSections(s).forEach((detail) => {
     const detailId = String(detail && detail.detail_id || '').trim();
     if (!detailId) return;
-    renderStatusListDetail(payloads[detailId] || null, detailId);
+    const payload = payloads[detailId] || null;
+    if (String(detail && detail.render_kind || '') === 'activity_list') {
+      renderActivityListDetail(payload, detailId);
+      return;
+    }
+    renderStatusListDetail(payload, detailId);
   });
 }
 function setMonitorMode(mode) {
@@ -1173,15 +1307,22 @@ function renderMonitorDetailSections(s) {
     const spanClass = escapeHtml(String(detail && detail.span_class || 'span6'));
     const waitingText = escapeHtml(String(detail && detail.waiting_text || 'Waiting for data...'));
     const showAllText = escapeHtml(String(detail && detail.show_all_text || 'Show all'));
-    return `<section class="mgroup ${spanClass}">
-      <h3><span class="gicon" aria-hidden="true"><span class="mdi mdi-apps"></span></span>${title}</h3>
-      <div class="mgroup-grid">
-        <div class="mcard">
+    const renderKind = String(detail && detail.render_kind || 'status_list');
+    const body = renderKind === 'activity_list'
+      ? `<div class="mcard">
+          <div class="metric-sub" id="${detailId}MoreHint">${waitingText}</div>
+          <div class="activity-empty" id="${detailId}Empty">${waitingText}</div>
+          <ul class="activity-list" id="${detailId}PreviewList"></ul>
+          <details><summary class="monitor-note">${showAllText}</summary><ul class="activity-list" id="${detailId}AllList"></ul></details>
+        </div>`
+      : `<div class="mcard">
           <div class="metric-sub" id="${detailId}MoreHint">${waitingText}</div>
           <ul class="docker-list" id="${detailId}PreviewList"></ul>
           <details><summary class="monitor-note">${showAllText}</summary><ul class="docker-list" id="${detailId}AllList"></ul></details>
-        </div>
-      </div>
+        </div>`;
+    return `<section class="mgroup ${spanClass}">
+      <h3><span class="gicon" aria-hidden="true"><span class="mdi mdi-apps"></span></span>${title}</h3>
+      <div class="mgroup-grid">${body}</div>
     </section>`;
   }).join('');
 }
@@ -1525,6 +1666,7 @@ function updateEspPreview(s) {
     hostNameVal.textContent = host || 'Waiting for host...';
     hostNameVal.classList.toggle('is-empty', !host);
   }
+  renderEspActivityRows(buildActivityItemsFromStatus(s), s);
 
   metricText('espBrightnessVal', String(brightness));
   setEspSliderValue('espBrightnessFill', 'espBrightnessKnob', brightness, 255);
