@@ -1,6 +1,9 @@
 const hostMetricsBoot = (window.__HOST_METRICS_BOOT__ && typeof window.__HOST_METRICS_BOOT__ === 'object')
   ? window.__HOST_METRICS_BOOT__
   : {};
+const hostMetricsRoutes = (hostMetricsBoot.routes && typeof hostMetricsBoot.routes === 'object')
+  ? hostMetricsBoot.routes
+  : {};
 let nextLogId = Number(hostMetricsBoot.nextLogId || 1);
 if (!Number.isFinite(nextLogId) || nextLogId < 1) nextLogId = 1;
 let nextCommLogId = Number(hostMetricsBoot.nextCommLogId || 1);
@@ -29,6 +32,12 @@ const HIDE_METRIC_LOGS_KEY = 'esp_host_bridge_hide_metric_logs_v1';
 const HIDE_METRIC_LOGS_KEY_LEGACY = 'host_metrics_hide_metric_logs_v1';
 const UI_SECTIONS_KEY = 'esp_host_bridge_ui_sections_v1';
 const UI_SECTIONS_KEY_LEGACY = 'host_metrics_ui_sections_v1';
+
+function routeUrl(key, fallback) {
+  const value = hostMetricsRoutes[key];
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  return fallback;
+}
 
 function previewUiSnapshot(s) {
   const preview = (s && s.preview_ui && typeof s.preview_ui === 'object') ? s.preview_ui : hostMetricsBoot.preview_ui;
@@ -124,7 +133,7 @@ function workloadMetricFlag(metrics, key) {
 }
 async function pollStatus() {
   try {
-    const r = await fetch('/api/status');
+    const r = await fetch(routeUrl('status', 'api/status'));
     const s = await r.json();
     const started = s.started_at ? new Date(s.started_at * 1000).toLocaleString() : '--';
     const agentEl = document.getElementById('statusAgent');
@@ -1532,7 +1541,7 @@ function updateEspPreview(s) {
 
 async function pollLogs() {
   try {
-    const r = await fetch(`/api/logs?since=${nextLogId}`);
+    const r = await fetch(`${routeUrl('logs', 'api/logs')}?since=${nextLogId}`);
     const data = await r.json();
     for (const row of data.lines) { mainLogRows.push(row); nextLogId = row.id + 1; }
     renderMainLogs();
@@ -1557,7 +1566,7 @@ function renderMainLogs() {
 }
 async function pollCommLogs() {
   try {
-    const r = await fetch(`/api/comm-logs?since=${nextCommLogId}`);
+    const r = await fetch(`${routeUrl('comm_logs', 'api/comm-logs')}?since=${nextCommLogId}`);
     const data = await r.json();
     const box = document.getElementById('commLogs');
     if (!box) return;
@@ -1741,7 +1750,7 @@ function syncFanSensorSelection(preferredValue) {
   syncSavedSelectOptions(sel, value, value);
 }
 async function fetchHardwareChoices() {
-  const r = await fetch('/api/hardware-choices');
+  const r = await fetch(routeUrl('hardware_choices', 'api/hardware-choices'));
   return await r.json();
 }
 async function refreshInterfaceChoices() {
@@ -1914,7 +1923,7 @@ async function refreshSerialPorts() {
   result.textContent = 'Refreshing...';
   btn.disabled = true;
   try {
-    const r = await fetch('/api/ports');
+    const r = await fetch(routeUrl('ports', 'api/ports'));
     const data = await r.json();
     const ports = (data && Array.isArray(data.ports)) ? data.ports : [];
     fillSelect(sel, ports, '(no serial ports found)');
@@ -1968,7 +1977,7 @@ async function testSerialPort() {
   result.textContent = 'Testing...';
   btn.disabled = true;
   try {
-    const r = await fetch('/api/test-serial', {
+    const r = await fetch(routeUrl('test_serial', 'api/test-serial'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ port: portEl.value, baud: Number(baudEl.value || 115200) })
@@ -1993,7 +2002,7 @@ async function previewHostPowerCommands() {
   btn.disabled = true;
   box.textContent = 'Loading preview...';
   try {
-    const r = await fetch('/api/host-power-preview', {
+    const r = await fetch(routeUrl('host_power_preview', 'api/host-power-preview'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2030,7 +2039,7 @@ async function detectHostPowerDefaults() {
   result.textContent = 'Detecting...';
   btn.disabled = true;
   try {
-    const r = await fetch('/api/host-power-defaults');
+    const r = await fetch(routeUrl('host_power_defaults', 'api/host-power-defaults'));
     const data = await r.json();
     const items = Array.isArray(data && data.items) ? data.items : [];
     const byId = Object.create(null);
@@ -2065,7 +2074,7 @@ async function clearLogs() {
   if (!btn || !box) return;
   btn.disabled = true;
   try {
-    const r = await fetch('/api/logs/clear', { method: 'POST' });
+    const r = await fetch(routeUrl('logs_clear', 'api/logs/clear'), { method: 'POST' });
     if (r.ok) {
       mainLogRows = [];
       renderMainLogs();
@@ -2078,7 +2087,7 @@ async function clearLogs() {
 }
 
 function downloadLogs() {
-  window.location.href = '/api/logs/text';
+  window.location.href = routeUrl('logs_text', 'api/logs/text');
 }
 function initMainLogsBuffer() {
   const box = document.getElementById('logs');
@@ -2119,7 +2128,7 @@ async function clearCommLogs() {
   if (!btn || !box) return;
   btn.disabled = true;
   try {
-    const r = await fetch('/api/comm-logs/clear', { method: 'POST' });
+    const r = await fetch(routeUrl('comm_logs_clear', 'api/comm-logs/clear'), { method: 'POST' });
     if (r.ok) {
       box.textContent = 'No communication events yet. Serial disconnects/reconnects will appear here.';
       nextCommLogId = 1;
@@ -2131,7 +2140,7 @@ async function clearCommLogs() {
 }
 
 function downloadCommLogs() {
-  window.location.href = '/api/comm-logs/text';
+  window.location.href = routeUrl('comm_logs_text', 'api/comm-logs/text');
 }
 
 function initSectionState() {

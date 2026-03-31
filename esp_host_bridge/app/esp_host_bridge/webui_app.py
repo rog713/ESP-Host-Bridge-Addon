@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import quote_plus
 
+from flask import url_for
+
 from .config import (
     _clean_bool,
     _clean_str,
@@ -60,7 +62,7 @@ from .serial import list_serial_port_choices, test_serial_open
 def _redir(value: str, key: str = "msg"):
     from flask import redirect
 
-    return redirect(f"/?{key}={quote_plus(value)}")
+    return redirect(f"{url_for('index')}?{key}={quote_plus(value)}")
 
 def _render_mode_toggle_html() -> str:
     return (
@@ -513,6 +515,7 @@ def _render_preview_action_footnote(groups: list[dict[str, Any]], target: str) -
 def page_html(title: str, body: str) -> str:
     mode_toggle_html = _render_mode_toggle_html()
     topbar_subtitle = _render_topbar_subtitle()
+    host_ui_css_url = url_for("host_static_asset", asset_name="host_ui.css")
     return f"""<!doctype html>
 <html>
 <head>
@@ -524,7 +527,7 @@ def page_html(title: str, body: str) -> str:
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,0&display=swap">
   <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-  <link rel="stylesheet" href="/static/host/host_ui.css">
+  <link rel="stylesheet" href="{html.escape(host_ui_css_url)}">
 </head>
 <body>
   <div class="shell">
@@ -724,7 +727,7 @@ def create_app(
 
     def _login_redirect() -> Any:
         next_target = _safe_next_target(request.full_path if request.query_string else request.path)
-        return redirect(f"/login?next={quote_plus(next_target)}")
+        return redirect(f"{url_for('login')}?next={quote_plus(next_target)}")
 
     @app.before_request
     def require_webui_login() -> Any:
@@ -747,7 +750,7 @@ def create_app(
         auth_enabled = _clean_bool(cfg.get("webui_auth_enabled"), False)
         password_hash = _clean_str(cfg.get("webui_password_hash"), "")
         if not auth_enabled or not password_hash:
-            return redirect("/")
+            return redirect(url_for("index"))
 
         next_target = _safe_next_target(request.values.get("next", "/"))
         error = ""
@@ -759,13 +762,15 @@ def create_app(
             error = "Incorrect password."
 
         err_html = f'<div class="err">{html.escape(error)}</div>' if error else ""
+        host_ui_css_url = url_for("host_static_asset", asset_name="host_ui.css")
+        login_action = url_for("login")
         return f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>ESP Host Bridge Login</title>
-  <link rel="stylesheet" href="/static/host/host_ui.css">
+  <link rel="stylesheet" href="{html.escape(host_ui_css_url)}">
 </head>
 <body>
   <div class="shell" style="max-width:520px;">
@@ -773,7 +778,7 @@ def create_app(
       <h1 style="margin-top:0;">ESP Host Bridge</h1>
       <p class="hint">Direct Web UI access is protected. Enter the password to continue.</p>
       {err_html}
-      <form method="post" action="/login">
+      <form method="post" action="{html.escape(login_action)}">
         <input type="hidden" name="next" value="{html.escape(next_target)}">
         <div class="row"><label>Password</label><div><input name="password" type="password" autocomplete="current-password"></div></div>
         <div class="actions"><button type="submit">Sign In</button></div>
@@ -786,7 +791,7 @@ def create_app(
     @app.post("/logout")
     def logout() -> Any:
         session.pop("webui_authenticated", None)
-        return redirect("/login")
+        return redirect(url_for("login"))
 
     @app.get("/")
     def index() -> str:
@@ -804,7 +809,13 @@ def create_app(
 
         msg_html = f'<div class="ok">{html.escape(msg)}</div>' if msg else ""
         err_html = f'<div class="err">{html.escape(err)}</div>' if err else ""
-        logout_action = "/logout"
+        logout_action = url_for("logout")
+        save_action = url_for("save")
+        start_action = url_for("start_proc")
+        restart_action = url_for("restart_proc")
+        stop_action = url_for("stop_proc")
+        index_action = url_for("index")
+        host_ui_js_url = url_for("host_static_asset", asset_name="host_ui.js")
         summary_bar = st.get("summary_bar") or []
         preview_cards = st.get("preview_cards") or []
         preview_ui = st.get("preview_ui") or {}
@@ -849,7 +860,7 @@ def create_app(
   <div class=\"card\">
     {msg_html}
     {err_html}
-    <form method=\"post\" action=\"/save\">
+    <form method=\"post\" action=\"{html.escape(save_action)}\">
       <div class=\"quick-setup\">
         <h3><span class="quick-setup-icon" aria-hidden="true"><span class="mdi mdi-auto-fix"></span></span>Quick Setup</h3>
         <p>For most users: pick a serial port, test it, then save and restart the agent.</p>
@@ -881,7 +892,7 @@ def create_app(
       </div></details>
       <div class=\"actions form-actions-sticky\">
         <button type=\"submit\">Save + Restart</button>
-        <button class=\"secondary\" type=\"submit\" formaction=\"/save?restart=0\">Save Only</button>
+        <button class=\"secondary\" type=\"submit\" formaction=\"{html.escape(save_action)}?restart=0\">Save Only</button>
       </div>
       <details class=\"section\" data-section-key=\"advanced_ui\"><summary><span class=\"section-icon\" aria-hidden=\"true\"><span class=\"mdi mdi-cog-outline\"></span></span>Advanced</summary><div class=\"section-body\">
       <div class=\"hint\">Config file: <code>{html.escape(str(cfg_path))}</code></div>
@@ -931,10 +942,10 @@ def create_app(
             <div class="status-pill" id="espBootReason">Last ESP Reset: --</div>
           </div>
           <div class="actions" style="margin: 0;">
-            <form method="post" action="/start" style="display:inline;"><button class="secondary" type="submit">Start</button></form>
-            <form method="post" action="/restart" style="display:inline;"><button type="submit">Restart</button></form>
-            <form method="post" action="/stop" style="display:inline;"><button class="danger" type="submit">Stop</button></form>
-            <form method="get" action="/" style="display:inline;"><button class="secondary" type="submit">Refresh</button></form>
+            <form method="post" action="{html.escape(start_action)}" style="display:inline;"><button class="secondary" type="submit">Start</button></form>
+            <form method="post" action="{html.escape(restart_action)}" style="display:inline;"><button type="submit">Restart</button></form>
+            <form method="post" action="{html.escape(stop_action)}" style="display:inline;"><button class="danger" type="submit">Stop</button></form>
+            <form method="get" action="{html.escape(index_action)}" style="display:inline;"><button class="secondary" type="submit">Refresh</button></form>
             {'<form method="post" action="' + html.escape(logout_action) + '" style="display:inline;"><button class="secondary" type="submit">Sign Out</button></form>' if _webui_auth_required() else ''}
           </div>
         </div>
@@ -1070,9 +1081,23 @@ window.__HOST_METRICS_BOOT__ = {{
   nextLogId: {st['next_log_id']},
   nextCommLogId: {st.get('next_comm_log_id', 1)},
   preview_ui: {json.dumps(preview_ui)},
+  routes: {json.dumps({
+      "status": url_for("api_status"),
+      "logs": url_for("api_logs"),
+      "logs_clear": url_for("api_logs_clear"),
+      "logs_text": url_for("api_logs_text"),
+      "comm_logs": url_for("api_comm_logs"),
+      "comm_logs_clear": url_for("api_comm_logs_clear"),
+      "comm_logs_text": url_for("api_comm_logs_text"),
+      "hardware_choices": url_for("api_hardware_choices"),
+      "ports": url_for("api_ports"),
+      "test_serial": url_for("api_test_serial"),
+      "host_power_preview": url_for("api_host_power_preview") if not homeassistant_mode else "",
+      "host_power_defaults": url_for("api_host_power_defaults") if not homeassistant_mode else "",
+  })},
 }};
 </script>
-<script src="/static/host/host_ui.js"></script>
+<script src="{html.escape(host_ui_js_url)}"></script>
 """
         return page_html("ESP Host Bridge", body)
 
@@ -1104,8 +1129,8 @@ window.__HOST_METRICS_BOOT__ = {{
             ok_run, message_run = pub.restart(cfg)
             if not ok_run:
                 return _redir(message_run, key="err")
-            return redirect("/?msg=Saved+and+restarted")
-        return redirect("/?msg=Saved")
+            return redirect(f"{url_for('index')}?msg=Saved+and+restarted")
+        return redirect(f"{url_for('index')}?msg=Saved")
 
     @app.post("/start")
     def start_proc() -> Any:

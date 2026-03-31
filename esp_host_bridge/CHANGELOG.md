@@ -1,3 +1,7 @@
+## 2026.03.31.5
+
+- Fixed Home Assistant ingress asset and API URLs so the add-on Web UI styles and scripts load under ingress correctly.
+
 ## 2026.03.31.4
 
 - Rebuilt the Home Assistant add-on from the refactored `esp_host_bridge` core.
